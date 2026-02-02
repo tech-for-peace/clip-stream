@@ -249,7 +249,7 @@ export function TimeSegmentEditor({
               index={index}
               onUpdate={(updated) =>
                 onSegmentsChange(
-                  segments.map((s) => (s.id === updated.id ? updated : s))
+                  segments.map((s) => (s.id === updated.id ? updated : s)),
                 )
               }
               onRemove={() => removeSegment(segment.id)}

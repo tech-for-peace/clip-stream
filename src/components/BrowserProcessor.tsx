@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Cpu,
   Download,
@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { useFFmpegProcessor, type LogEntry } from "@/hooks/useFFmpegProcessor";
 import type { ClipConfig } from "@/types/clip";
-import { useState } from "react";
 
 interface BrowserProcessorProps {
   config: ClipConfig;
@@ -88,7 +87,9 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
           </span>
         )}
         {isReady && !isMultiThreaded && (
-          <span className="text-xs text-muted-foreground">(single-threaded)</span>
+          <span className="text-xs text-muted-foreground">
+            (single-threaded)
+          </span>
         )}
       </div>
 
@@ -195,7 +196,10 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
               className="max-h-48 overflow-y-auto bg-background/50 p-2 font-mono text-xs space-y-0.5"
             >
               {logs.map((log, i) => (
-                <div key={i} className={`${logTypeColors[log.type]} leading-relaxed`}>
+                <div
+                  key={i}
+                  className={`${logTypeColors[log.type]} leading-relaxed`}
+                >
                   <span className="text-muted-foreground/60">
                     [{log.timestamp.toLocaleTimeString()}]
                   </span>{" "}
