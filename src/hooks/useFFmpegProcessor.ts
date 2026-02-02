@@ -3,6 +3,12 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import type { ClipConfig } from "@/types/clip";
 
+export interface LogEntry {
+  timestamp: Date;
+  type: "info" | "warn" | "error" | "progress";
+  message: string;
+}
+
 interface ProcessingState {
   isLoading: boolean;
   loadProgress: number;
@@ -12,6 +18,7 @@ interface ProcessingState {
   progress: number;
   error: string | null;
   outputUrl: string | null;
+  logs: LogEntry[];
 }
 
 // SHA-384 hashes for FFmpeg resources (version 0.12.6)
@@ -100,12 +107,27 @@ export function useFFmpegProcessor() {
     progress: 0,
     error: null,
     outputUrl: null,
+    logs: [],
   });
+
+  const addLog = useCallback((type: LogEntry["type"], message: string) => {
+    const entry: LogEntry = { timestamp: new Date(), type, message };
+    setState((s) => ({ ...s, logs: [...s.logs.slice(-99), entry] })); // Keep last 100 logs
+    console.log(`[FFmpeg ${type}]`, message);
+  }, []);
+
+  const clearLogs = useCallback(() => {
+    setState((s) => ({ ...s, logs: [] }));
+  }, []);
 
   const load = useCallback(async () => {
     if (ffmpegRef.current?.loaded) return;
 
     const useMultiThread = supportsMultiThreading();
+    addLog("info", `Multi-threading: ${useMultiThread ? "enabled" : "disabled (requires cross-origin isolation)"}`);
+    if (!useMultiThread) {
+      addLog("warn", "SharedArrayBuffer unavailable - running in single-threaded mode");
+    }
     console.log("[FFmpeg] Starting load, multi-thread:", useMultiThread);
     
     setState((s) => ({
@@ -122,12 +144,13 @@ export function useFFmpegProcessor() {
       ffmpegRef.current = ffmpeg;
 
       ffmpeg.on("log", ({ message }) => {
-        console.log("[FFmpeg]", message);
+        addLog("info", message);
       });
 
       ffmpeg.on("progress", ({ progress, time }) => {
-        console.log(`[FFmpeg] Progress: ${Math.round(progress * 100)}% (time: ${time})`);
-        setState((s) => ({ ...s, progress: Math.round(progress * 100) }));
+        const pct = Math.round(progress * 100);
+        addLog("progress", `Progress: ${pct}% (time: ${time})`);
+        setState((s) => ({ ...s, progress: pct }));
       });
 
       // Choose core based on browser support
@@ -137,23 +160,28 @@ export function useFFmpegProcessor() {
       const resourcePrefix = useMultiThread ? "core-mt" : "core";
 
       // Load core.js with integrity verification
+      addLog("info", "Loading FFmpeg core...");
       setState((s) => ({ ...s, loadProgress: 10, loadPhase: "core" }));
       const coreURL = await verifyAndFetchResource(
         `${baseURL}/ffmpeg-core.js`,
         `${resourcePrefix}/ffmpeg-core.js`,
         "text/javascript"
       );
+      addLog("info", "Core loaded successfully");
 
       // Load WASM with integrity verification
+      addLog("info", "Loading WebAssembly module (~32MB)...");
       setState((s) => ({ ...s, loadProgress: 40, loadPhase: "wasm" }));
       const wasmURL = await verifyAndFetchResource(
         `${baseURL}/ffmpeg-core.wasm`,
         `${resourcePrefix}/ffmpeg-core.wasm`,
         "application/wasm"
       );
+      addLog("info", "WASM module loaded successfully");
 
       // Load worker if multi-threaded
       if (useMultiThread) {
+        addLog("info", "Loading multi-thread worker...");
         setState((s) => ({ ...s, loadProgress: 70, loadPhase: "worker" }));
         const workerURL = await verifyAndFetchResource(
           `${baseURL}/ffmpeg-core.worker.js`,
@@ -161,9 +189,11 @@ export function useFFmpegProcessor() {
           "text/javascript"
         );
         await ffmpeg.load({ coreURL, wasmURL, workerURL });
+        addLog("info", "Multi-threaded FFmpeg ready");
       } else {
         setState((s) => ({ ...s, loadProgress: 80 }));
         await ffmpeg.load({ coreURL, wasmURL });
+        addLog("info", "Single-threaded FFmpeg ready");
       }
 
       setState((s) => ({
@@ -180,8 +210,9 @@ export function useFFmpegProcessor() {
         loadPhase: "idle",
         error: err instanceof Error ? err.message : "Failed to load FFmpeg",
       }));
+      addLog("error", err instanceof Error ? err.message : "Failed to load FFmpeg");
     }
-  }, []);
+  }, [addLog]);
 
   const process = useCallback(async (config: ClipConfig) => {
     if (!config.videoFile || config.segments.length === 0) {
@@ -198,6 +229,9 @@ export function useFFmpegProcessor() {
       return;
     }
 
+    clearLogs();
+    addLog("info", `Processing ${config.segments.length} segment(s)...`);
+    
     setState((s) => ({
       ...s,
       isProcessing: true,
@@ -208,12 +242,16 @@ export function useFFmpegProcessor() {
 
     try {
       // Write input files
+      addLog("info", `Loading video file: ${config.videoFile.name}`);
       const videoData = await fetchFile(config.videoFile);
       await ffmpeg.writeFile("input.mp4", videoData);
+      addLog("info", "Video file loaded into memory");
 
       if (config.audioFile) {
+        addLog("info", `Loading audio file: ${config.audioFile.name}`);
         const audioData = await fetchFile(config.audioFile);
         await ffmpeg.writeFile("input_audio", audioData);
+        addLog("info", "Audio file loaded into memory");
       }
 
       const fadeDuration = config.fadeDuration;
@@ -280,11 +318,15 @@ export function useFFmpegProcessor() {
         "output.mp4"
       );
 
+      addLog("info", "Starting FFmpeg processing...");
       await ffmpeg.exec(args);
 
+      addLog("info", "Reading output file...");
       const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
       const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
+
+      addLog("info", `Processing complete! Output size: ${(data.length / 1024 / 1024).toFixed(2)} MB`);
 
       setState((s) => ({
         ...s,
@@ -300,13 +342,15 @@ export function useFFmpegProcessor() {
       }
       await ffmpeg.deleteFile("output.mp4");
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Processing failed";
+      addLog("error", errorMsg);
       setState((s) => ({
         ...s,
         isProcessing: false,
-        error: err instanceof Error ? err.message : "Processing failed",
+        error: errorMsg,
       }));
     }
-  }, []);
+  }, [addLog, clearLogs]);
 
   const reset = useCallback(() => {
     if (state.outputUrl) {
@@ -327,5 +371,6 @@ export function useFFmpegProcessor() {
     load,
     process,
     reset,
+    clearLogs,
   };
 }
