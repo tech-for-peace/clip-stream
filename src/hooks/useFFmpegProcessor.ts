@@ -310,7 +310,7 @@ export function useFFmpegProcessor() {
         }
 
         // Determine if we should process audio
-        const processAudio = config.audioFile || hasInputAudio;
+        const processAudio = !!(config.audioFile || hasInputAudio);
         if (!processAudio) {
           addLog(
             "warn",
@@ -321,121 +321,160 @@ export function useFFmpegProcessor() {
         const fadeDuration = config.fadeDuration;
         const numSegments = config.segments.length;
 
-        const videoFilters: string[] = [];
-        const audioFilters: string[] = [];
-        const concatInputs: string[] = [];
+        // Helper function to build args for processing
+        const buildProcessingArgs = (withAudio: boolean): string[] => {
+          const videoFilters: string[] = [];
+          const audioFilters: string[] = [];
+          const concatInputs: string[] = [];
 
-        config.segments.forEach((seg, i) => {
-          const startSec = timeToSeconds(seg.start);
-          const endSec = timeToSeconds(seg.end);
-          const duration = endSec - startSec;
+          config.segments.forEach((seg, i) => {
+            const startSec = timeToSeconds(seg.start);
+            const endSec = timeToSeconds(seg.end);
+            const duration = endSec - startSec;
 
-          const shouldFadeIn = seg.fadeIn || (i === 0 && config.globalFadeIn);
-          const shouldFadeOut =
-            seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
+            const shouldFadeIn = seg.fadeIn || (i === 0 && config.globalFadeIn);
+            const shouldFadeOut =
+              seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
 
-          let vFilter = `[0:v]trim=start=${startSec}:end=${endSec},setpts=PTS-STARTPTS`;
-          if (shouldFadeIn) {
-            vFilter += `,fade=t=in:st=0:d=${fadeDuration}`;
-          }
-          if (shouldFadeOut) {
-            vFilter += `,fade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
-          }
-          vFilter += `[v${i}]`;
-          videoFilters.push(vFilter);
-
-          if (processAudio) {
-            const audioInput = config.audioFile ? "1:a" : "0:a";
-            let aFilter = `[${audioInput}]atrim=start=${startSec}:end=${endSec},asetpts=PTS-STARTPTS`;
+            let vFilter = `[0:v]trim=start=${startSec}:end=${endSec},setpts=PTS-STARTPTS`;
             if (shouldFadeIn) {
-              aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
+              vFilter += `,fade=t=in:st=0:d=${fadeDuration}`;
             }
             if (shouldFadeOut) {
-              aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
+              vFilter += `,fade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
             }
-            aFilter += `[a${i}]`;
-            audioFilters.push(aFilter);
-            concatInputs.push(`[v${i}][a${i}]`);
+            vFilter += `[v${i}]`;
+            videoFilters.push(vFilter);
+
+            if (withAudio) {
+              const audioInput = config.audioFile ? "1:a" : "0:a";
+              let aFilter = `[${audioInput}]atrim=start=${startSec}:end=${endSec},asetpts=PTS-STARTPTS`;
+              if (shouldFadeIn) {
+                aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
+              }
+              if (shouldFadeOut) {
+                aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
+              }
+              aFilter += `[a${i}]`;
+              audioFilters.push(aFilter);
+              concatInputs.push(`[v${i}][a${i}]`);
+            } else {
+              concatInputs.push(`[v${i}]`);
+            }
+          });
+
+          let filterComplex: string;
+          if (withAudio) {
+            const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
+            filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(";");
           } else {
-            concatInputs.push(`[v${i}]`);
+            const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
+            filterComplex = [...videoFilters, concatFilter].join(";");
           }
-        });
 
-        let filterComplex: string;
-        if (processAudio) {
-          const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
-          filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(
-            ";",
+          const args = ["-i", "input.mp4"];
+          if (config.audioFile) {
+            args.push("-i", "input_audio");
+          }
+          args.push("-filter_complex", filterComplex, "-map", "[outv]");
+
+          if (withAudio) {
+            args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
+          }
+
+          args.push(
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-y",
+            "output.mp4",
           );
-        } else {
-          const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
-          filterComplex = [...videoFilters, concatFilter].join(";");
+
+          return args;
+        };
+
+        // Try processing with audio first, fallback to video-only if it fails
+        let success = false;
+        let attemptWithAudio = processAudio;
+
+        while (!success) {
+          const args = buildProcessingArgs(attemptWithAudio);
+          addLog("info", `Processing ${attemptWithAudio ? "with" : "without"} audio...`);
+          addLog("info", `FFmpeg args: ${args.join(" ")}`);
+
+          addLog("info", "Starting FFmpeg processing...");
+          const exitCode = await ffmpeg.exec(args);
+
+          if (exitCode !== 0) {
+            addLog("warn", `FFmpeg exited with code ${exitCode}`);
+            
+            // If we tried with audio and it failed, retry without audio
+            if (attemptWithAudio) {
+              addLog("warn", "Audio processing failed, retrying without audio...");
+              attemptWithAudio = false;
+              // Delete any partial output
+              try {
+                await ffmpeg.deleteFile("output.mp4");
+              } catch {
+                // File might not exist
+              }
+              continue;
+            } else {
+              throw new Error(`FFmpeg exited with code ${exitCode}`);
+            }
+          }
+
+          addLog("info", "Reading output file...");
+          const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
+
+          if (data.length < 1000) {
+            addLog("warn", `Output file is too small (${data.length} bytes)`);
+            
+            // If we tried with audio and got corrupted output, retry without
+            if (attemptWithAudio) {
+              addLog("warn", "Output corrupted with audio, retrying without audio...");
+              attemptWithAudio = false;
+              try {
+                await ffmpeg.deleteFile("output.mp4");
+              } catch {
+                // File might not exist
+              }
+              continue;
+            } else {
+              throw new Error("Output file is corrupted or empty");
+            }
+          }
+
+          // Success!
+          success = true;
+          const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
+          const url = URL.createObjectURL(blob);
+
+          addLog(
+            "info",
+            `Processing complete! Output size: ${(data.length / 1024 / 1024).toFixed(2)} MB${!attemptWithAudio && processAudio ? " (video only - audio failed)" : ""}`,
+          );
+
+          setState((s) => ({
+            ...s,
+            isProcessing: false,
+            progress: 100,
+            outputUrl: url,
+          }));
         }
 
-        addLog("info", `Filter complex: ${filterComplex}`);
-
-        const args = ["-i", "input.mp4"];
-        if (config.audioFile) {
-          args.push("-i", "input_audio");
-        }
-        args.push("-filter_complex", filterComplex, "-map", "[outv]");
-
-        if (processAudio) {
-          args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
-        }
-
-        args.push(
-          "-c:v",
-          "libx264",
-          "-preset",
-          "fast",
-          "-crf",
-          "23",
-          "-pix_fmt",
-          "yuv420p",
-          "-movflags",
-          "+faststart",
-          "-y",
-          "output.mp4",
-        );
-
-        addLog("info", `FFmpeg args: ${args.join(" ")}`);
-
-        addLog("info", "Starting FFmpeg processing...");
-        const exitCode = await ffmpeg.exec(args);
-        
-        if (exitCode !== 0) {
-          throw new Error(`FFmpeg exited with code ${exitCode}`);
-        }
-
-        addLog("info", "Reading output file...");
-        const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
-        
-        if (data.length < 1000) {
-          addLog("error", `Output file is too small (${data.length} bytes), likely corrupted`);
-          throw new Error("Output file is corrupted or empty");
-        }
-        
-        const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
-        const url = URL.createObjectURL(blob);
-
-        addLog(
-          "info",
-          `Processing complete! Output size: ${(data.length / 1024 / 1024).toFixed(2)} MB`,
-        );
-
-        setState((s) => ({
-          ...s,
-          isProcessing: false,
-          progress: 100,
-          outputUrl: url,
-        }));
-
+        // Cleanup
         await ffmpeg.deleteFile("input.mp4");
         if (config.audioFile) {
           await ffmpeg.deleteFile("input_audio");
         }
-        await ffmpeg.deleteFile("output.mp4");
+        try {
+          await ffmpeg.deleteFile("output.mp4");
+        } catch {
+          // Already deleted or doesn't exist
+        }
       } catch (err) {
         const errorMsg =
           err instanceof Error ? err.message : "Processing failed";
