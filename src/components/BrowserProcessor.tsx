@@ -11,6 +11,7 @@ interface BrowserProcessorProps {
 export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const {
     isLoading,
+    loadProgress,
     isProcessing,
     isReady,
     progress,
@@ -44,9 +45,20 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading FFmpeg...
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading FFmpeg... {loadProgress}%
+          </div>
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary/60 transition-all duration-300"
+              style={{ width: `${loadProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Downloading ~32MB WebAssembly module (first time only)
+          </p>
         </div>
       )}
 
@@ -63,7 +75,7 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
             <Loader2 className="h-4 w-4 animate-spin" />
             Processing... {progress}%
           </div>
-          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
               className="h-full bg-primary transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -91,30 +103,23 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
         </div>
       )}
 
-      {!isProcessing && !outputUrl && (
+      {!isLoading && !isProcessing && !outputUrl && (
         <Button
           onClick={() => process(config)}
-          disabled={!isReady || !canProcess || isLoading}
+          disabled={!isReady || !canProcess}
           size="sm"
           className="w-full"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              Loading...
-            </>
-          ) : (
-            <>
-              <Cpu className="h-4 w-4 mr-1" />
-              Process Video
-            </>
-          )}
+          <Cpu className="h-4 w-4 mr-1" />
+          Process Video
         </Button>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Process entirely in your browser using WebAssembly. No uploads needed.
-      </p>
+      {!isLoading && !outputUrl && (
+        <p className="text-xs text-muted-foreground">
+          Process entirely in your browser. No uploads needed.
+        </p>
+      )}
     </div>
   );
 }

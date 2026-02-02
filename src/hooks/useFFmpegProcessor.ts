@@ -5,6 +5,7 @@ import type { ClipConfig } from "@/types/clip";
 
 interface ProcessingState {
   isLoading: boolean;
+  loadProgress: number;
   isProcessing: boolean;
   progress: number;
   error: string | null;
@@ -25,6 +26,7 @@ export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
+    loadProgress: 0,
     isProcessing: false,
     progress: 0,
     error: null,
@@ -34,7 +36,7 @@ export function useFFmpegProcessor() {
   const load = useCallback(async () => {
     if (ffmpegRef.current?.loaded) return;
 
-    setState((s) => ({ ...s, isLoading: true, error: null }));
+    setState((s) => ({ ...s, isLoading: true, loadProgress: 0, error: null }));
 
     try {
       const ffmpeg = new FFmpeg();
@@ -45,16 +47,23 @@ export function useFFmpegProcessor() {
       });
 
       const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      });
+      
+      // Load core.js with progress tracking
+      setState((s) => ({ ...s, loadProgress: 10 }));
+      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript");
+      
+      setState((s) => ({ ...s, loadProgress: 40 }));
+      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm");
+      
+      setState((s) => ({ ...s, loadProgress: 80 }));
+      await ffmpeg.load({ coreURL, wasmURL });
 
-      setState((s) => ({ ...s, isLoading: false }));
+      setState((s) => ({ ...s, isLoading: false, loadProgress: 100 }));
     } catch (err) {
       setState((s) => ({
         ...s,
         isLoading: false,
+        loadProgress: 0,
         error: err instanceof Error ? err.message : "Failed to load FFmpeg",
       }));
     }
@@ -167,6 +176,7 @@ export function useFFmpegProcessor() {
     }
     setState({
       isLoading: false,
+      loadProgress: 0,
       isProcessing: false,
       progress: 0,
       error: null,
