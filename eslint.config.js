@@ -19,15 +19,15 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true }
+      "react-refresh/only-export-components": [
+        "warn",
+        { allowConstantExport: true },
       ],
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' }
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_" },
       ],
-      '@typescript-eslint/consistent-type-imports': 'error'
-    }
-  }
-)
+      "@typescript-eslint/consistent-type-imports": "error",
+    },
+  },
+);

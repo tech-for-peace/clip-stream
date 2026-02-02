@@ -36,11 +36,3 @@ export function parseTimeSegments(input: string): TimeSegment[] {
 
   return segments;
 }
-
-export function formatSegmentDisplay(segment: TimeSegment): string {
-  return `${segment.start} → ${segment.end}`;
-}
-
-export function validateTimeFormat(time: string): boolean {
-  return /^\d{1,2}:\d{2}(:\d{2})?$/.test(time);
-}
