@@ -96,15 +96,15 @@ const Index = () => {
                 />
               </div>
             </section>
-          </div>
 
-          {/* Right Column - Output */}
-          <div className="space-y-4">
             {/* Browser Processor */}
             <section className="glass-panel p-4">
               <BrowserProcessor config={config} />
             </section>
+          </div>
 
+          {/* Right Column - Output */}
+          <div className="space-y-4">
             {/* Command Output */}
             <section className="glass-panel p-4">
               <CommandOutput command={command} />
