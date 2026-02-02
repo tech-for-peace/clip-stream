@@ -51,17 +51,16 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container max-w-7xl mx-auto px-4 py-4">
+      <main className="container max-w-7xl mx-auto px-4 py-4 space-y-4">
+        {/* Top Row - Configuration & Processing */}
         <div className="grid lg:grid-cols-2 gap-4">
-          {/* Left Column - Configuration */}
+          {/* Left Column - Inputs */}
           <div className="space-y-4">
-            {/* File Inputs Section */}
             <section className="glass-panel p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold">Input Files</h2>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <FileUpload
                   type="video"
@@ -77,7 +76,6 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Time Segments & Global Fade Settings */}
             <section className="glass-panel p-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <TimeSegmentEditor
@@ -96,25 +94,22 @@ const Index = () => {
                 />
               </div>
             </section>
-
-            {/* Browser Processor */}
-            <section className="glass-panel p-4">
-              <BrowserProcessor config={config} />
-            </section>
           </div>
 
-          {/* Right Column - Output */}
-          <div className="space-y-4">
-            {/* Command Output */}
-            <section className="glass-panel p-4">
-              <CommandOutput command={command} />
-            </section>
+          {/* Right Column - Browser Processor */}
+          <section className="glass-panel p-4">
+            <BrowserProcessor config={config} />
+          </section>
+        </div>
 
-            {/* Installation Guide */}
-            <section className="glass-panel p-4">
-              <InstallGuide />
-            </section>
-          </div>
+        {/* Bottom Row - FFmpeg Command & Install Guide */}
+        <div className="grid lg:grid-cols-2 gap-4">
+          <section className="glass-panel p-4">
+            <CommandOutput command={command} />
+          </section>
+          <section className="glass-panel p-4">
+            <InstallGuide />
+          </section>
         </div>
       </main>
 
