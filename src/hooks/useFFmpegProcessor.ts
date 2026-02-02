@@ -157,7 +157,15 @@ export function useFFmpegProcessor() {
       ffmpeg.on("progress", ({ progress, time }) => {
         // Clamp progress to 0-100 range (FFmpeg can report values > 1 initially)
         const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-        addLog("progress", `Progress: ${pct}% (time: ${time})`);
+        // Convert time from microseconds to human-readable format
+        const totalSeconds = Math.floor(time / 1000000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const timeStr = hours > 0 
+          ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+          : `${minutes}:${seconds.toString().padStart(2, "0")}`;
+        addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
         setState((s) => ({ ...s, progress: pct }));
       });
 
@@ -362,6 +370,8 @@ export function useFFmpegProcessor() {
           filterComplex = [...videoFilters, concatFilter].join(";");
         }
 
+        addLog("info", `Filter complex: ${filterComplex}`);
+
         const args = ["-i", "input.mp4"];
         if (config.audioFile) {
           args.push("-i", "input_audio");
@@ -383,8 +393,11 @@ export function useFFmpegProcessor() {
           "yuv420p",
           "-movflags",
           "+faststart",
+          "-y",
           "output.mp4",
         );
+
+        addLog("info", `FFmpeg args: ${args.join(" ")}`);
 
         addLog("info", "Starting FFmpeg processing...");
         await ffmpeg.exec(args);
