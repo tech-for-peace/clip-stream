@@ -1,6 +1,6 @@
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
-import { Settings } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Settings } from "lucide-react";
 
 interface GlobalFadeSettingsProps {
   fadeIn: boolean;
@@ -30,7 +30,9 @@ export function GlobalFadeSettings({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Fade In at Start</p>
-            <p className="text-xs text-muted-foreground">Apply fade in to the first segment</p>
+            <p className="text-xs text-muted-foreground">
+              Apply fade in to the first segment
+            </p>
           </div>
           <Switch checked={fadeIn} onCheckedChange={onFadeInChange} />
         </div>
@@ -38,7 +40,9 @@ export function GlobalFadeSettings({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Fade Out at End</p>
-            <p className="text-xs text-muted-foreground">Apply fade out to the last segment</p>
+            <p className="text-xs text-muted-foreground">
+              Apply fade out to the last segment
+            </p>
           </div>
           <Switch checked={fadeOut} onCheckedChange={onFadeOutChange} />
         </div>

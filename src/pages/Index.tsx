@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
-import { FileUpload } from '@/components/FileUpload';
-import { TimeSegmentEditor } from '@/components/TimeSegmentEditor';
-import { GlobalFadeSettings } from '@/components/GlobalFadeSettings';
-import { CommandOutput } from '@/components/CommandOutput';
-import { InstallGuide } from '@/components/InstallGuide';
+import { useState, useMemo } from "react";
+import { FileUpload } from "@/components/FileUpload";
+import { TimeSegmentEditor } from "@/components/TimeSegmentEditor";
+import { GlobalFadeSettings } from "@/components/GlobalFadeSettings";
+import { CommandOutput } from "@/components/CommandOutput";
+import { InstallGuide } from "@/components/InstallGuide";
 
-import { ClipConfig, TimeSegment } from '@/types/clip';
-import { generateFFmpegCommand } from '@/utils/ffmpegGenerator';
-import { Scissors, Sparkles } from 'lucide-react';
+import type { ClipConfig } from "@/types/clip";
+import { generateFFmpegCommand } from "@/utils/ffmpegGenerator";
+import { Scissors, Sparkles } from "lucide-react";
 
 const Index = () => {
   const [config, setConfig] = useState<ClipConfig>({
@@ -23,7 +23,7 @@ const Index = () => {
 
   const updateConfig = <K extends keyof ClipConfig>(
     key: K,
-    value: ClipConfig[K]
+    value: ClipConfig[K],
   ) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
@@ -60,17 +60,17 @@ const Index = () => {
                 <Sparkles className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold">Input Files</h2>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <FileUpload
                   type="video"
                   file={config.videoFile}
-                  onFileChange={(file) => updateConfig('videoFile', file)}
+                  onFileChange={(file) => updateConfig("videoFile", file)}
                 />
                 <FileUpload
                   type="audio"
                   file={config.audioFile}
-                  onFileChange={(file) => updateConfig('audioFile', file)}
+                  onFileChange={(file) => updateConfig("audioFile", file)}
                   optional
                 />
               </div>
@@ -81,15 +81,17 @@ const Index = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <TimeSegmentEditor
                   segments={config.segments}
-                  onSegmentsChange={(segments) => updateConfig('segments', segments)}
+                  onSegmentsChange={(segments) =>
+                    updateConfig("segments", segments)
+                  }
                 />
                 <GlobalFadeSettings
                   fadeIn={config.globalFadeIn}
                   fadeOut={config.globalFadeOut}
                   fadeDuration={config.fadeDuration}
-                  onFadeInChange={(v) => updateConfig('globalFadeIn', v)}
-                  onFadeOutChange={(v) => updateConfig('globalFadeOut', v)}
-                  onFadeDurationChange={(v) => updateConfig('fadeDuration', v)}
+                  onFadeInChange={(v) => updateConfig("globalFadeIn", v)}
+                  onFadeOutChange={(v) => updateConfig("globalFadeOut", v)}
+                  onFadeDurationChange={(v) => updateConfig("fadeDuration", v)}
                 />
               </div>
             </section>
@@ -114,7 +116,8 @@ const Index = () => {
       <footer className="border-t border-border/50 mt-12">
         <div className="container max-w-7xl mx-auto px-4 py-4">
           <p className="text-xs text-muted-foreground text-center">
-            ClipStream runs entirely in your browser. No data is sent to any server.
+            ClipStream runs entirely in your browser. No data is sent to any
+            server.
           </p>
         </div>
       </footer>

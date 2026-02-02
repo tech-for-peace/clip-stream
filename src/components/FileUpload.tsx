@@ -1,15 +1,20 @@
-import { useCallback, useState } from 'react';
-import { Upload, Video, Music, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useCallback, useState } from "react";
+import { Upload, Video, Music, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface FileUploadProps {
-  type: 'video' | 'audio';
+  type: "video" | "audio";
   file: File | null;
   onFileChange: (file: File | null) => void;
   optional?: boolean;
 }
 
-export function FileUpload({ type, file, onFileChange, optional }: FileUploadProps) {
+export function FileUpload({
+  type,
+  file,
+  onFileChange,
+  optional,
+}: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -29,16 +34,19 @@ export function FileUpload({ type, file, onFileChange, optional }: FileUploadPro
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      onFileChange(files[0]);
-    }
-  }, [onFileChange]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        onFileChange(files[0]);
+      }
+    },
+    [onFileChange],
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -46,9 +54,9 @@ export function FileUpload({ type, file, onFileChange, optional }: FileUploadPro
     }
   };
 
-  const Icon = type === 'video' ? Video : Music;
-  const accept = type === 'video' ? 'video/*' : 'audio/*,.mkv';
-  const label = type === 'video' ? 'Video File' : 'Audio File';
+  const Icon = type === "video" ? Video : Music;
+  const accept = type === "video" ? "video/*" : "audio/*,.mkv";
+  const label = type === "video" ? "Video File" : "Audio File";
 
   if (file) {
     return (
@@ -74,10 +82,7 @@ export function FileUpload({ type, file, onFileChange, optional }: FileUploadPro
 
   return (
     <div
-      className={cn(
-        'file-drop-zone p-6 text-center',
-        isDragging && 'active'
-      )}
+      className={cn("file-drop-zone p-6 text-center", isDragging && "active")}
       onDragEnter={handleDragIn}
       onDragLeave={handleDragOut}
       onDragOver={handleDrag}
@@ -97,7 +102,10 @@ export function FileUpload({ type, file, onFileChange, optional }: FileUploadPro
           </div>
           <div>
             <p className="text-sm font-medium">
-              {label} {optional && <span className="text-muted-foreground">(optional)</span>}
+              {label}{" "}
+              {optional && (
+                <span className="text-muted-foreground">(optional)</span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Drag & drop or click to browse

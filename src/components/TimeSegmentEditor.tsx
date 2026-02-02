@@ -1,24 +1,25 @@
-import { useState } from 'react';
-import { TimeSegment } from '@/types/clip';
-import { parseTimeSegments } from '@/utils/parseTimeSegments';
-import { Edit2, Plus, Trash2, X, Check } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { useState } from "react";
+import type { TimeSegment } from "@/types/clip";
+import { parseTimeSegments } from "@/utils/parseTimeSegments";
+import { Edit2, Plus, Trash2, X, Check } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface TimeSegmentEditorProps {
   segments: TimeSegment[];
   onSegmentsChange: (segments: TimeSegment[]) => void;
 }
 
-export function TimeSegmentEditor({ segments, onSegmentsChange }: TimeSegmentEditorProps) {
+export function TimeSegmentEditor({
+  segments,
+  onSegmentsChange,
+}: TimeSegmentEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState('');
+  const [editText, setEditText] = useState("");
 
   const handleEditClick = () => {
-    const text = segments
-      .map(s => `${s.start}-${s.end}`)
-      .join('\n');
+    const text = segments.map((s) => `${s.start}-${s.end}`).join("\n");
     setEditText(text);
     setIsEditing(true);
   };
@@ -26,12 +27,16 @@ export function TimeSegmentEditor({ segments, onSegmentsChange }: TimeSegmentEdi
   const handleSave = () => {
     const newSegments = parseTimeSegments(editText);
     // Preserve fade settings for matching segments
-    const updatedSegments = newSegments.map(newSeg => {
+    const updatedSegments = newSegments.map((newSeg) => {
       const existing = segments.find(
-        s => s.start === newSeg.start && s.end === newSeg.end
+        (s) => s.start === newSeg.start && s.end === newSeg.end,
       );
       if (existing) {
-        return { ...newSeg, fadeIn: existing.fadeIn, fadeOut: existing.fadeOut };
+        return {
+          ...newSeg,
+          fadeIn: existing.fadeIn,
+          fadeOut: existing.fadeOut,
+        };
       }
       return newSeg;
     });
@@ -41,30 +46,30 @@ export function TimeSegmentEditor({ segments, onSegmentsChange }: TimeSegmentEdi
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditText('');
+    setEditText("");
   };
 
   const toggleFadeIn = (id: string) => {
     onSegmentsChange(
-      segments.map(s => (s.id === id ? { ...s, fadeIn: !s.fadeIn } : s))
+      segments.map((s) => (s.id === id ? { ...s, fadeIn: !s.fadeIn } : s)),
     );
   };
 
   const toggleFadeOut = (id: string) => {
     onSegmentsChange(
-      segments.map(s => (s.id === id ? { ...s, fadeOut: !s.fadeOut } : s))
+      segments.map((s) => (s.id === id ? { ...s, fadeOut: !s.fadeOut } : s)),
     );
   };
 
   const removeSegment = (id: string) => {
-    onSegmentsChange(segments.filter(s => s.id !== id));
+    onSegmentsChange(segments.filter((s) => s.id !== id));
   };
 
   const addEmptySegment = () => {
     const newSegment: TimeSegment = {
       id: Math.random().toString(36).substring(2, 15),
-      start: '00:00',
-      end: '00:00',
+      start: "00:00",
+      end: "00:00",
       fadeIn: false,
       fadeOut: false,
     };
@@ -138,7 +143,8 @@ export function TimeSegmentEditor({ segments, onSegmentsChange }: TimeSegmentEdi
                   {index + 1}.
                 </span>
                 <div className="flex-1 font-mono text-sm">
-                  {segment.start} <span className="text-muted-foreground">→</span> {segment.end}
+                  {segment.start}{" "}
+                  <span className="text-muted-foreground">→</span> {segment.end}
                 </div>
                 <button
                   onClick={() => removeSegment(segment.id)}
