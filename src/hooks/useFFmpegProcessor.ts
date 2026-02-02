@@ -162,9 +162,10 @@ export function useFFmpegProcessor() {
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        const timeStr = hours > 0 
-          ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-          : `${minutes}:${seconds.toString().padStart(2, "0")}`;
+        const timeStr =
+          hours > 0
+            ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+            : `${minutes}:${seconds.toString().padStart(2, "0")}`;
         addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
         setState((s) => ({ ...s, progress: pct }));
       });
@@ -280,23 +281,25 @@ export function useFFmpegProcessor() {
         ffmpeg.on("log", logHandler);
 
         // Run probe command - this will log stream info
-        await ffmpeg.exec([
-          "-i", "input.mp4", 
-          "-t", "0", 
-          "-f", "null", 
-          "-"
-        ]);
+        await ffmpeg.exec(["-i", "input.mp4", "-t", "0", "-f", "null", "-"]);
 
         // Parse duration from logs (format: "Duration: HH:MM:SS.xx")
-        const durationLog = audioCheckLogs.find(log => log.includes("Duration:"));
+        const durationLog = audioCheckLogs.find((log) =>
+          log.includes("Duration:"),
+        );
         if (durationLog) {
-          const match = durationLog.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+          const match = durationLog.match(
+            /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/,
+          );
           if (match) {
             const hours = parseInt(match[1], 10);
             const minutes = parseInt(match[2], 10);
             const seconds = parseFloat(match[3]);
             videoDuration = hours * 3600 + minutes * 60 + seconds;
-            addLog("info", `Video duration: ${videoDuration.toFixed(2)} seconds`);
+            addLog(
+              "info",
+              `Video duration: ${videoDuration.toFixed(2)} seconds`,
+            );
           }
         }
 
@@ -304,7 +307,8 @@ export function useFFmpegProcessor() {
         hasInputAudio = audioCheckLogs.some(
           (log) =>
             log.toLowerCase().includes("audio:") ||
-            (log.toLowerCase().includes("stream") && log.toLowerCase().includes("audio")),
+            (log.toLowerCase().includes("stream") &&
+              log.toLowerCase().includes("audio")),
         );
 
         addLog(
@@ -317,15 +321,22 @@ export function useFFmpegProcessor() {
           for (const seg of config.segments) {
             const startSec = timeToSeconds(seg.start);
             const endSec = timeToSeconds(seg.end);
-            
+
             if (startSec >= videoDuration) {
-              throw new Error(`Segment start time (${seg.start}) is beyond video duration (${videoDuration.toFixed(1)}s)`);
+              throw new Error(
+                `Segment start time (${seg.start}) is beyond video duration (${videoDuration.toFixed(1)}s)`,
+              );
             }
             if (endSec > videoDuration) {
-              addLog("warn", `Segment end time (${seg.end}) exceeds video duration, clamping to ${videoDuration.toFixed(1)}s`);
+              addLog(
+                "warn",
+                `Segment end time (${seg.end}) exceeds video duration, clamping to ${videoDuration.toFixed(1)}s`,
+              );
             }
             if (startSec >= endSec) {
-              throw new Error(`Invalid segment: start (${seg.start}) must be before end (${seg.end})`);
+              throw new Error(
+                `Invalid segment: start (${seg.start}) must be before end (${seg.end})`,
+              );
             }
           }
         }
@@ -353,14 +364,18 @@ export function useFFmpegProcessor() {
         config.segments.forEach((seg, i) => {
           const startSec = timeToSeconds(seg.start);
           const endSec = timeToSeconds(seg.end);
-          addLog("info", `Segment ${i + 1}: ${seg.start} (${startSec}s) to ${seg.end} (${endSec}s)`);
+          addLog(
+            "info",
+            `Segment ${i + 1}: ${seg.start} (${startSec}s) to ${seg.end} (${endSec}s)`,
+          );
         });
 
         // For single segment without fades, use simpler -ss/-to approach
-        const canUseSimpleMode = numSegments === 1 && 
-          !config.segments[0].fadeIn && 
-          !config.segments[0].fadeOut && 
-          !config.globalFadeIn && 
+        const canUseSimpleMode =
+          numSegments === 1 &&
+          !config.segments[0].fadeIn &&
+          !config.segments[0].fadeOut &&
+          !config.globalFadeIn &&
           !config.globalFadeOut;
 
         // Build simple args (no filter_complex)
@@ -368,15 +383,25 @@ export function useFFmpegProcessor() {
           const seg = config.segments[0];
           const startSec = timeToSeconds(seg.start);
           const endSec = timeToSeconds(seg.end);
-          
+
           const args = [
-            "-ss", startSec.toString(),
-            "-i", "input.mp4",
-            "-t", (endSec - startSec).toString(),
+            "-ss",
+            startSec.toString(),
+            "-i",
+            "input.mp4",
+            "-t",
+            (endSec - startSec).toString(),
           ];
-          
+
           if (config.audioFile) {
-            args.push("-ss", startSec.toString(), "-i", "input_audio", "-t", (endSec - startSec).toString());
+            args.push(
+              "-ss",
+              startSec.toString(),
+              "-i",
+              "input_audio",
+              "-t",
+              (endSec - startSec).toString(),
+            );
           }
 
           if (withAudio) {
@@ -386,10 +411,14 @@ export function useFFmpegProcessor() {
           }
 
           args.push(
-            "-preset", "fast",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             "-y",
             "output.mp4",
           );
@@ -442,7 +471,11 @@ export function useFFmpegProcessor() {
           let filterComplex: string;
           if (withAudio) {
             const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
-            filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(";");
+            filterComplex = [
+              ...videoFilters,
+              ...audioFilters,
+              concatFilter,
+            ].join(";");
           } else {
             const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
             filterComplex = [...videoFilters, concatFilter].join(";");
@@ -459,11 +492,16 @@ export function useFFmpegProcessor() {
           }
 
           args.push(
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             "-y",
             "output.mp4",
           );
@@ -471,9 +509,14 @@ export function useFFmpegProcessor() {
           return args;
         };
 
-        const buildProcessingArgs = canUseSimpleMode ? buildSimpleArgs : buildComplexArgs;
+        const buildProcessingArgs = canUseSimpleMode
+          ? buildSimpleArgs
+          : buildComplexArgs;
 
-        addLog("info", `Using ${canUseSimpleMode ? "simple" : "complex filter"} mode`);
+        addLog(
+          "info",
+          `Using ${canUseSimpleMode ? "simple" : "complex filter"} mode`,
+        );
 
         // Try processing with audio first, fallback to video-only if it fails
         let success = false;
@@ -481,7 +524,10 @@ export function useFFmpegProcessor() {
 
         while (!success) {
           const args = buildProcessingArgs(attemptWithAudio);
-          addLog("info", `Processing ${attemptWithAudio ? "with" : "without"} audio...`);
+          addLog(
+            "info",
+            `Processing ${attemptWithAudio ? "with" : "without"} audio...`,
+          );
           addLog("info", `Command: ffmpeg ${args.join(" ")}`);
 
           addLog("info", "Starting FFmpeg processing...");
@@ -489,10 +535,13 @@ export function useFFmpegProcessor() {
 
           if (exitCode !== 0) {
             addLog("warn", `FFmpeg exited with code ${exitCode}`);
-            
+
             // If we tried with audio and it failed, retry without audio
             if (attemptWithAudio) {
-              addLog("warn", "Audio processing failed, retrying without audio...");
+              addLog(
+                "warn",
+                "Audio processing failed, retrying without audio...",
+              );
               attemptWithAudio = false;
               // Delete any partial output
               try {
@@ -511,10 +560,13 @@ export function useFFmpegProcessor() {
 
           if (data.length < 1000) {
             addLog("warn", `Output file is too small (${data.length} bytes)`);
-            
+
             // If we tried with audio and got corrupted output, retry without
             if (attemptWithAudio) {
-              addLog("warn", "Output corrupted with audio, retrying without audio...");
+              addLog(
+                "warn",
+                "Output corrupted with audio, retrying without audio...",
+              );
               attemptWithAudio = false;
               try {
                 await ffmpeg.deleteFile("output.mp4");
