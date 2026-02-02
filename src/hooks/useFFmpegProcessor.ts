@@ -201,7 +201,16 @@ export function useFFmpegProcessor() {
       }
       args.push("-filter_complex", filterComplex);
       args.push("-map", "[outv]", "-map", "[outa]");
-      args.push("-c:v", "libx264", "-c:a", "aac", "output.mp4");
+      args.push(
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "output.mp4"
+      );
 
       await ffmpeg.exec(args);
 
