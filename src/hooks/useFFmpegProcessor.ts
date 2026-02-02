@@ -258,11 +258,33 @@ export function useFFmpegProcessor() {
         await ffmpeg.writeFile("input.mp4", videoData);
         addLog("info", "Video file loaded into memory");
 
+        // Check if input video has audio by probing
+        let hasInputAudio = true;
+        try {
+          // Try to extract a tiny audio sample to check if audio exists
+          await ffmpeg.exec([
+            "-i", "input.mp4",
+            "-t", "0.1",
+            "-vn",
+            "-f", "null",
+            "-"
+          ]);
+        } catch {
+          // If this fails, video likely has no audio
+          hasInputAudio = false;
+        }
+
         if (config.audioFile) {
           addLog("info", `Loading audio file: ${config.audioFile.name}`);
           const audioData = await fetchFile(config.audioFile);
           await ffmpeg.writeFile("input_audio", audioData);
           addLog("info", "Audio file loaded into memory");
+        }
+
+        // Determine if we should process audio
+        const processAudio = config.audioFile || hasInputAudio;
+        if (!processAudio) {
+          addLog("warn", "Input video has no audio track - processing video only");
         }
 
         const fadeDuration = config.fadeDuration;
@@ -291,35 +313,43 @@ export function useFFmpegProcessor() {
           vFilter += `[v${i}]`;
           videoFilters.push(vFilter);
 
-          const audioInput = config.audioFile ? "1:a" : "0:a";
-          let aFilter = `[${audioInput}]atrim=start=${startSec}:end=${endSec},asetpts=PTS-STARTPTS`;
-          if (shouldFadeIn) {
-            aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
+          if (processAudio) {
+            const audioInput = config.audioFile ? "1:a" : "0:a";
+            let aFilter = `[${audioInput}]atrim=start=${startSec}:end=${endSec},asetpts=PTS-STARTPTS`;
+            if (shouldFadeIn) {
+              aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
+            }
+            if (shouldFadeOut) {
+              aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
+            }
+            aFilter += `[a${i}]`;
+            audioFilters.push(aFilter);
+            concatInputs.push(`[v${i}][a${i}]`);
+          } else {
+            concatInputs.push(`[v${i}]`);
           }
-          if (shouldFadeOut) {
-            aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
-          }
-          aFilter += `[a${i}]`;
-          audioFilters.push(aFilter);
-
-          concatInputs.push(`[v${i}][a${i}]`);
         });
 
-        const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
-        const allFilters = [...videoFilters, ...audioFilters, concatFilter];
-        const filterComplex = allFilters.join(";");
+        let filterComplex: string;
+        if (processAudio) {
+          const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
+          filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(";");
+        } else {
+          const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
+          filterComplex = [...videoFilters, concatFilter].join(";");
+        }
 
         const args = ["-i", "input.mp4"];
         if (config.audioFile) {
           args.push("-i", "input_audio");
         }
+        args.push("-filter_complex", filterComplex, "-map", "[outv]");
+        
+        if (processAudio) {
+          args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
+        }
+        
         args.push(
-          "-filter_complex",
-          filterComplex,
-          "-map",
-          "[outv]",
-          "-map",
-          "[outa]",
           "-c:v",
           "libx264",
           "-preset",
@@ -330,10 +360,6 @@ export function useFFmpegProcessor() {
           "yuv420p",
           "-movflags",
           "+faststart",
-          "-c:a",
-          "aac",
-          "-b:a",
-          "128k",
           "output.mp4",
         );
 
