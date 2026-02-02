@@ -47,7 +47,7 @@ export function FileUpload({ type, file, onFileChange, optional }: FileUploadPro
   };
 
   const Icon = type === 'video' ? Video : Music;
-  const accept = type === 'video' ? 'video/*' : 'audio/*';
+  const accept = type === 'video' ? 'video/*' : 'audio/*,.mkv';
   const label = type === 'video' ? 'Video File' : 'Audio File';
 
   if (file) {

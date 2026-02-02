@@ -62,7 +62,7 @@ const Index = () => {
                 <h2 className="text-sm font-semibold">Input Files</h2>
               </div>
               
-              <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <FileUpload
                   type="video"
                   file={config.videoFile}
@@ -90,24 +90,22 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Time Segments Section */}
+            {/* Time Segments & Global Fade Settings */}
             <section className="glass-panel p-5">
-              <TimeSegmentEditor
-                segments={config.segments}
-                onSegmentsChange={(segments) => updateConfig('segments', segments)}
-              />
-            </section>
-
-            {/* Global Fade Settings */}
-            <section className="glass-panel p-5">
-              <GlobalFadeSettings
-                fadeIn={config.globalFadeIn}
-                fadeOut={config.globalFadeOut}
-                fadeDuration={config.fadeDuration}
-                onFadeInChange={(v) => updateConfig('globalFadeIn', v)}
-                onFadeOutChange={(v) => updateConfig('globalFadeOut', v)}
-                onFadeDurationChange={(v) => updateConfig('fadeDuration', v)}
-              />
+              <div className="grid md:grid-cols-2 gap-6">
+                <TimeSegmentEditor
+                  segments={config.segments}
+                  onSegmentsChange={(segments) => updateConfig('segments', segments)}
+                />
+                <GlobalFadeSettings
+                  fadeIn={config.globalFadeIn}
+                  fadeOut={config.globalFadeOut}
+                  fadeDuration={config.fadeDuration}
+                  onFadeInChange={(v) => updateConfig('globalFadeIn', v)}
+                  onFadeOutChange={(v) => updateConfig('globalFadeOut', v)}
+                  onFadeDurationChange={(v) => updateConfig('fadeDuration', v)}
+                />
+              </div>
             </section>
           </div>
 
