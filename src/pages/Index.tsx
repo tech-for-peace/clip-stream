@@ -4,7 +4,7 @@ import { TimeSegmentEditor } from '@/components/TimeSegmentEditor';
 import { GlobalFadeSettings } from '@/components/GlobalFadeSettings';
 import { CommandOutput } from '@/components/CommandOutput';
 import { InstallGuide } from '@/components/InstallGuide';
-import { Input } from '@/components/ui/input';
+
 import { ClipConfig, TimeSegment } from '@/types/clip';
 import { generateFFmpegCommand } from '@/utils/ffmpegGenerator';
 import { Scissors, Sparkles } from 'lucide-react';
@@ -13,7 +13,6 @@ const Index = () => {
   const [config, setConfig] = useState<ClipConfig>({
     videoFile: null,
     audioFile: null,
-    outputName: '',
     segments: [],
     globalFadeIn: false,
     globalFadeOut: false,
@@ -51,13 +50,13 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container max-w-7xl mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-2 gap-6">
+      <main className="container max-w-7xl mx-auto px-4 py-4">
+        <div className="grid lg:grid-cols-2 gap-4">
           {/* Left Column - Configuration */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* File Inputs Section */}
-            <section className="glass-panel p-5 space-y-4">
-              <div className="flex items-center gap-2">
+            <section className="glass-panel p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold">Input Files</h2>
               </div>
@@ -75,24 +74,11 @@ const Index = () => {
                   optional
                 />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Output Filename</label>
-                <Input
-                  value={config.outputName}
-                  onChange={(e) => updateConfig('outputName', e.target.value)}
-                  placeholder="output"
-                  className="bg-secondary border-border"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Without extension (will use source format)
-                </p>
-              </div>
             </section>
 
             {/* Time Segments & Global Fade Settings */}
-            <section className="glass-panel p-5">
-              <div className="grid md:grid-cols-2 gap-6">
+            <section className="glass-panel p-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <TimeSegmentEditor
                   segments={config.segments}
                   onSegmentsChange={(segments) => updateConfig('segments', segments)}
@@ -110,14 +96,14 @@ const Index = () => {
           </div>
 
           {/* Right Column - Output */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Command Output */}
-            <section className="glass-panel p-5">
+            <section className="glass-panel p-4">
               <CommandOutput command={command} />
             </section>
 
             {/* Installation Guide */}
-            <section className="glass-panel p-5">
+            <section className="glass-panel p-4">
               <InstallGuide />
             </section>
           </div>
