@@ -76,6 +76,14 @@ function supportsMultiThreading(): boolean {
       globalThis as { crossOriginIsolated?: boolean }
     ).crossOriginIsolated;
 
+    // Log diagnostic info for debugging
+    console.log("[FFmpeg] Environment check:", {
+      hasSharedArrayBuffer,
+      crossOriginIsolated: isCrossOriginIsolated,
+      location: window.location.origin,
+      isInIframe: window.self !== window.top,
+    });
+
     return hasSharedArrayBuffer && isCrossOriginIsolated;
   } catch (e) {
     console.warn("[FFmpeg] Multi-threading check failed:", e);
