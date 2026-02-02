@@ -321,8 +321,56 @@ export function useFFmpegProcessor() {
         const fadeDuration = config.fadeDuration;
         const numSegments = config.segments.length;
 
-        // Helper function to build args for processing
-        const buildProcessingArgs = (withAudio: boolean): string[] => {
+        // Log segment info for debugging
+        config.segments.forEach((seg, i) => {
+          const startSec = timeToSeconds(seg.start);
+          const endSec = timeToSeconds(seg.end);
+          addLog("info", `Segment ${i + 1}: ${seg.start} (${startSec}s) to ${seg.end} (${endSec}s)`);
+        });
+
+        // For single segment without fades, use simpler -ss/-to approach
+        const canUseSimpleMode = numSegments === 1 && 
+          !config.segments[0].fadeIn && 
+          !config.segments[0].fadeOut && 
+          !config.globalFadeIn && 
+          !config.globalFadeOut;
+
+        // Build simple args (no filter_complex)
+        const buildSimpleArgs = (withAudio: boolean): string[] => {
+          const seg = config.segments[0];
+          const startSec = timeToSeconds(seg.start);
+          const endSec = timeToSeconds(seg.end);
+          
+          const args = [
+            "-ss", startSec.toString(),
+            "-i", "input.mp4",
+            "-t", (endSec - startSec).toString(),
+          ];
+          
+          if (config.audioFile) {
+            args.push("-ss", startSec.toString(), "-i", "input_audio", "-t", (endSec - startSec).toString());
+          }
+
+          if (withAudio) {
+            args.push("-c:v", "libx264", "-c:a", "aac", "-b:a", "128k");
+          } else {
+            args.push("-c:v", "libx264", "-an");
+          }
+
+          args.push(
+            "-preset", "fast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-y",
+            "output.mp4",
+          );
+
+          return args;
+        };
+
+        // Build complex args (with filter_complex for multi-segment or fades)
+        const buildComplexArgs = (withAudio: boolean): string[] => {
           const videoFilters: string[] = [];
           const audioFilters: string[] = [];
           const concatInputs: string[] = [];
@@ -395,6 +443,10 @@ export function useFFmpegProcessor() {
           return args;
         };
 
+        const buildProcessingArgs = canUseSimpleMode ? buildSimpleArgs : buildComplexArgs;
+
+        addLog("info", `Using ${canUseSimpleMode ? "simple" : "complex filter"} mode`);
+
         // Try processing with audio first, fallback to video-only if it fails
         let success = false;
         let attemptWithAudio = processAudio;
@@ -402,7 +454,7 @@ export function useFFmpegProcessor() {
         while (!success) {
           const args = buildProcessingArgs(attemptWithAudio);
           addLog("info", `Processing ${attemptWithAudio ? "with" : "without"} audio...`);
-          addLog("info", `FFmpeg args: ${args.join(" ")}`);
+          addLog("info", `Command: ffmpeg ${args.join(" ")}`);
 
           addLog("info", "Starting FFmpeg processing...");
           const exitCode = await ffmpeg.exec(args);
