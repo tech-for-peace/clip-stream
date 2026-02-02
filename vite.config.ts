@@ -21,4 +21,11 @@ export default defineConfig(({ mode: _mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    exclude: ["@ffmpeg/ffmpeg"],
+  },
+  worker: {
+    format: "es",
+    plugins: () => [react()],
+  },
 }));

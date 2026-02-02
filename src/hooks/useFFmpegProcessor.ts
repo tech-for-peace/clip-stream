@@ -21,16 +21,16 @@ interface ProcessingState {
   logs: LogEntry[];
 }
 
-// SHA-384 hashes for FFmpeg resources (version 0.12.6)
+// SHA-384 hashes for FFmpeg resources (version 0.12.10)
 // These ensure CDN resources haven't been tampered with
 const RESOURCE_HASHES: Record<string, string> = {
   // Single-threaded core
-  "core/ffmpeg-core.js": "sha384-PsNSRWjGgNB9C5D1F04lJF0iXfdgZV8NLf/Q3b8Hf56ztmGBrOYPGWCy/Cf3JTD0",
-  "core/ffmpeg-core.wasm": "sha384-eDEwGX3eJo+WD5Z+1+nZ0rWZNLEJLEVnT5t6PFvzOXPbWv3wTCjWMH0XgqNRzPJZ",
+  "core/ffmpeg-core.js": "sha384-9KlAmgHu5wDqdgQvFhQGZOtKdCwGcMppDhM/kBkUpZ5LS7KGuAHbE+NgtJQEf84i",
+  "core/ffmpeg-core.wasm": "sha384-U1VDhkPYrM3wTCT4/vjSpSsKqG/UjljYrYCI4hBSJ02svbCkxuCi6U6u/peg5vpW",
   // Multi-threaded core
-  "core-mt/ffmpeg-core.js": "sha384-1ek0sVr8erWHNgAW0q0TXp8BXyQCKmGEUjYGC0nFgEbNVKDPkXXLPNXJ4ZhDWFJo",
-  "core-mt/ffmpeg-core.wasm": "sha384-mRGC5u9d0W/MKEE6/RQz8oXp7RJR5u8EwQb0/rq8FxPpNlD0cGHv6p0dn9BhdPBf",
-  "core-mt/ffmpeg-core.worker.js": "sha384-QGCKwPPd3Y0lGqCPwWB5qVpBDYJ0lZHfLbXq5Pk4TfKrBX8U9eL3xD9D5k0qXQxE",
+  "core-mt/ffmpeg-core.js": "sha384-CqK+fB7O3Dl0SbCkpBiLNrSGeKVUCxa/mwPUPzOGLIQwVNBZEO3OOBhsTz6WqRw3",
+  "core-mt/ffmpeg-core.wasm": "sha384-IXnr5PE2UFcQ5DvI5LyubPqmMF46EkyIMlbdn4CNQR1iQ8/2irEkyhDFnVDxv4f/",
+  "core-mt/ffmpeg-core.worker.js": "sha384-mH8cZ9JWsDxI1nYKmKMTA3qGV40dhtv4c6nOLSi5O2rr+0bx3pzHPIkIi6++JFye",
 };
 
 async function verifyAndFetchResource(
@@ -42,15 +42,15 @@ async function verifyAndFetchResource(
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.status}`);
   }
-  
+
   const buffer = await response.arrayBuffer();
-  
+
   // Calculate SHA-384 hash of the downloaded content
   const hashBuffer = await crypto.subtle.digest("SHA-384", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashBase64 = btoa(String.fromCharCode(...hashArray));
   const calculatedHash = `sha384-${hashBase64}`;
-  
+
   // For now, log the hash for verification (in production, compare against known hashes)
   // Note: Hashes above are placeholders - in a real deployment, you'd calculate and store actual hashes
   const expectedHash = RESOURCE_HASHES[resourceKey];
@@ -62,7 +62,7 @@ async function verifyAndFetchResource(
     // In strict mode, you could throw an error here:
     // throw new Error(`Integrity check failed for ${resourceKey}`);
   }
-  
+
   const blob = new Blob([buffer], { type: mimeType });
   return URL.createObjectURL(blob);
 }
@@ -81,13 +81,13 @@ function supportsMultiThreading(): boolean {
   try {
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== "undefined";
     const isCrossOriginIsolated = !!(globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated;
-    
+
     console.log("[FFmpeg] Multi-threading check:", {
       hasSharedArrayBuffer,
       crossOriginIsolated: isCrossOriginIsolated,
       supported: hasSharedArrayBuffer && isCrossOriginIsolated,
     });
-    
+
     // SharedArrayBuffer requires cross-origin isolation
     return hasSharedArrayBuffer && isCrossOriginIsolated;
   } catch (e) {
@@ -129,7 +129,7 @@ export function useFFmpegProcessor() {
       addLog("warn", "SharedArrayBuffer unavailable - running in single-threaded mode");
     }
     console.log("[FFmpeg] Starting load, multi-thread:", useMultiThread);
-    
+
     setState((s) => ({
       ...s,
       isLoading: true,
@@ -155,8 +155,8 @@ export function useFFmpegProcessor() {
 
       // Choose core based on browser support
       const baseURL = useMultiThread
-        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
-        : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm"
+        : "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
       const resourcePrefix = useMultiThread ? "core-mt" : "core";
 
       // Load core.js with integrity verification
@@ -231,7 +231,7 @@ export function useFFmpegProcessor() {
 
     clearLogs();
     addLog("info", `Processing ${config.segments.length} segment(s)...`);
-    
+
     setState((s) => ({
       ...s,
       isProcessing: true,
