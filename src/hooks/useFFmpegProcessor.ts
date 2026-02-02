@@ -6,6 +6,8 @@ import type { ClipConfig } from "@/types/clip";
 interface ProcessingState {
   isLoading: boolean;
   loadProgress: number;
+  loadPhase: "idle" | "core" | "wasm" | "worker" | "ready";
+  isMultiThreaded: boolean;
   isProcessing: boolean;
   progress: number;
   error: string | null;
@@ -22,11 +24,21 @@ function timeToSeconds(time: string): number {
   return parts[0] || 0;
 }
 
+function supportsMultiThreading(): boolean {
+  try {
+    return typeof SharedArrayBuffer !== "undefined";
+  } catch {
+    return false;
+  }
+}
+
 export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
     loadProgress: 0,
+    loadPhase: "idle",
+    isMultiThreaded: false,
     isProcessing: false,
     progress: 0,
     error: null,
@@ -36,7 +48,15 @@ export function useFFmpegProcessor() {
   const load = useCallback(async () => {
     if (ffmpegRef.current?.loaded) return;
 
-    setState((s) => ({ ...s, isLoading: true, loadProgress: 0, error: null }));
+    const useMultiThread = supportsMultiThreading();
+    setState((s) => ({
+      ...s,
+      isLoading: true,
+      loadProgress: 0,
+      loadPhase: "core",
+      isMultiThreaded: useMultiThread,
+      error: null,
+    }));
 
     try {
       const ffmpeg = new FFmpeg();
@@ -46,24 +66,50 @@ export function useFFmpegProcessor() {
         setState((s) => ({ ...s, progress: Math.round(progress * 100) }));
       });
 
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-      
-      // Load core.js with progress tracking
-      setState((s) => ({ ...s, loadProgress: 10 }));
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript");
-      
-      setState((s) => ({ ...s, loadProgress: 40 }));
-      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm");
-      
-      setState((s) => ({ ...s, loadProgress: 80 }));
-      await ffmpeg.load({ coreURL, wasmURL });
+      // Choose core based on browser support
+      const baseURL = useMultiThread
+        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+        : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
 
-      setState((s) => ({ ...s, isLoading: false, loadProgress: 100 }));
+      // Load core.js
+      setState((s) => ({ ...s, loadProgress: 10, loadPhase: "core" }));
+      const coreURL = await toBlobURL(
+        `${baseURL}/ffmpeg-core.js`,
+        "text/javascript"
+      );
+
+      // Load WASM
+      setState((s) => ({ ...s, loadProgress: 40, loadPhase: "wasm" }));
+      const wasmURL = await toBlobURL(
+        `${baseURL}/ffmpeg-core.wasm`,
+        "application/wasm"
+      );
+
+      // Load worker if multi-threaded
+      if (useMultiThread) {
+        setState((s) => ({ ...s, loadProgress: 70, loadPhase: "worker" }));
+        const workerURL = await toBlobURL(
+          `${baseURL}/ffmpeg-core.worker.js`,
+          "text/javascript"
+        );
+        await ffmpeg.load({ coreURL, wasmURL, workerURL });
+      } else {
+        setState((s) => ({ ...s, loadProgress: 80 }));
+        await ffmpeg.load({ coreURL, wasmURL });
+      }
+
+      setState((s) => ({
+        ...s,
+        isLoading: false,
+        loadProgress: 100,
+        loadPhase: "ready",
+      }));
     } catch (err) {
       setState((s) => ({
         ...s,
         isLoading: false,
         loadProgress: 0,
+        loadPhase: "idle",
         error: err instanceof Error ? err.message : "Failed to load FFmpeg",
       }));
     }
@@ -71,7 +117,10 @@ export function useFFmpegProcessor() {
 
   const process = useCallback(async (config: ClipConfig) => {
     if (!config.videoFile || config.segments.length === 0) {
-      setState((s) => ({ ...s, error: "Please add a video file and at least one segment" }));
+      setState((s) => ({
+        ...s,
+        error: "Please add a video file and at least one segment",
+      }));
       return;
     }
 
@@ -81,7 +130,13 @@ export function useFFmpegProcessor() {
       return;
     }
 
-    setState((s) => ({ ...s, isProcessing: true, progress: 0, error: null, outputUrl: null }));
+    setState((s) => ({
+      ...s,
+      isProcessing: true,
+      progress: 0,
+      error: null,
+      outputUrl: null,
+    }));
 
     try {
       // Write input files
@@ -107,7 +162,8 @@ export function useFFmpegProcessor() {
         const duration = endSec - startSec;
 
         const shouldFadeIn = seg.fadeIn || (i === 0 && config.globalFadeIn);
-        const shouldFadeOut = seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
+        const shouldFadeOut =
+          seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
 
         let vFilter = `[0:v]trim=start=${startSec}:end=${endSec},setpts=PTS-STARTPTS`;
         if (shouldFadeIn) {
@@ -149,11 +205,16 @@ export function useFFmpegProcessor() {
 
       await ffmpeg.exec(args);
 
-      const data = await ffmpeg.readFile("output.mp4") as Uint8Array;
+      const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
       const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
 
-      setState((s) => ({ ...s, isProcessing: false, progress: 100, outputUrl: url }));
+      setState((s) => ({
+        ...s,
+        isProcessing: false,
+        progress: 100,
+        outputUrl: url,
+      }));
 
       // Cleanup
       await ffmpeg.deleteFile("input.mp4");
@@ -174,14 +235,13 @@ export function useFFmpegProcessor() {
     if (state.outputUrl) {
       URL.revokeObjectURL(state.outputUrl);
     }
-    setState({
-      isLoading: false,
-      loadProgress: 0,
+    setState((s) => ({
+      ...s,
       isProcessing: false,
       progress: 0,
       error: null,
       outputUrl: null,
-    });
+    }));
   }, [state.outputUrl]);
 
   return {

@@ -1,5 +1,12 @@
 import { useEffect } from "react";
-import { Cpu, Download, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import {
+  Cpu,
+  Download,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFFmpegProcessor } from "@/hooks/useFFmpegProcessor";
 import type { ClipConfig } from "@/types/clip";
@@ -8,10 +15,20 @@ interface BrowserProcessorProps {
   config: ClipConfig;
 }
 
+const phaseLabels: Record<string, string> = {
+  idle: "Initializing...",
+  core: "Loading FFmpeg core...",
+  wasm: "Loading WebAssembly module...",
+  worker: "Loading multi-thread worker...",
+  ready: "Ready",
+};
+
 export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const {
     isLoading,
     loadProgress,
+    loadPhase,
+    isMultiThreaded,
     isProcessing,
     isReady,
     progress,
@@ -42,13 +59,22 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
       <div className="flex items-center gap-2">
         <Cpu className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-medium">Process in Browser</h3>
+        {isReady && isMultiThreaded && (
+          <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
+            <Zap className="h-3 w-3" />
+            Multi-threaded
+          </span>
+        )}
+        {isReady && !isMultiThreaded && (
+          <span className="text-xs text-muted-foreground">(single-threaded)</span>
+        )}
       </div>
 
       {isLoading && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading FFmpeg... {loadProgress}%
+            {phaseLabels[loadPhase] || "Loading..."} {loadProgress}%
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
