@@ -121,6 +121,14 @@ export function useFFmpegProcessor() {
       );
     }
 
+    // Check cross-origin isolation status
+    if (!globalThis.crossOriginIsolated) {
+      addLog(
+        "warn",
+        "Cross-origin isolation not enabled - SharedArrayBuffer unavailable",
+      );
+    }
+
     setState((s) => ({
       ...s,
       isLoading: true,
