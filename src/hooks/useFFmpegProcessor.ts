@@ -155,7 +155,8 @@ export function useFFmpegProcessor() {
       });
 
       ffmpeg.on("progress", ({ progress, time }) => {
-        const pct = Math.round(progress * 100);
+        // Clamp progress to 0-100 range (FFmpeg can report values > 1 initially)
+        const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
         addLog("progress", `Progress: ${pct}% (time: ${time})`);
         setState((s) => ({ ...s, progress: pct }));
       });
@@ -258,21 +259,25 @@ export function useFFmpegProcessor() {
         await ffmpeg.writeFile("input.mp4", videoData);
         addLog("info", "Video file loaded into memory");
 
-        // Check if input video has audio by probing
-        let hasInputAudio = true;
-        try {
-          // Try to extract a tiny audio sample to check if audio exists
-          await ffmpeg.exec([
-            "-i", "input.mp4",
-            "-t", "0.1",
-            "-vn",
-            "-f", "null",
-            "-"
-          ]);
-        } catch {
-          // If this fails, video likely has no audio
-          hasInputAudio = false;
-        }
+        // Check if input video has audio by analyzing FFmpeg output
+        addLog("info", "Checking for audio track...");
+        let hasInputAudio = false;
+        
+        // Use ffprobe-style check - look for audio stream info in the logs
+        const audioCheckLogs: string[] = [];
+        const logHandler = ({ message }: { message: string }) => {
+          audioCheckLogs.push(message);
+        };
+        ffmpeg.on("log", logHandler);
+        
+        await ffmpeg.exec(["-i", "input.mp4", "-hide_banner"]);
+        
+        // Check if any log mentions an audio stream
+        hasInputAudio = audioCheckLogs.some(log => 
+          log.includes("Audio:") || log.includes("Stream #") && log.includes("audio")
+        );
+        
+        addLog("info", hasInputAudio ? "Audio track detected" : "No audio track found");
 
         if (config.audioFile) {
           addLog("info", `Loading audio file: ${config.audioFile.name}`);
