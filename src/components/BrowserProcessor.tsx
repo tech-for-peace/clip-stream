@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Cpu,
   Download,
@@ -6,10 +6,14 @@ import {
   AlertCircle,
   RotateCcw,
   Zap,
+  Terminal,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useFFmpegProcessor } from "@/hooks/useFFmpegProcessor";
+import { useFFmpegProcessor, type LogEntry } from "@/hooks/useFFmpegProcessor";
 import type { ClipConfig } from "@/types/clip";
+import { useState } from "react";
 
 interface BrowserProcessorProps {
   config: ClipConfig;
@@ -23,6 +27,13 @@ const phaseLabels: Record<string, string> = {
   ready: "Ready",
 };
 
+const logTypeColors: Record<LogEntry["type"], string> = {
+  info: "text-muted-foreground",
+  warn: "text-yellow-500",
+  error: "text-destructive",
+  progress: "text-primary",
+};
+
 export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const {
     isLoading,
@@ -34,14 +45,25 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     progress,
     error,
     outputUrl,
+    logs,
     load,
     process,
     reset,
   } = useFFmpegProcessor();
 
+  const [showLogs, setShowLogs] = useState(true);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-scroll logs to bottom
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const canProcess = config.videoFile && config.segments.length > 0;
   const baseName = config.videoFile?.name.replace(/\.[^/.]+$/, "") || "output";
@@ -145,6 +167,44 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
         <p className="text-xs text-muted-foreground">
           Process entirely in your browser. No uploads needed.
         </p>
+      )}
+
+      {/* Log Panel */}
+      {logs.length > 0 && (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="w-full flex items-center justify-between px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium">Processing Logs</span>
+              <span className="text-xs text-muted-foreground">
+                ({logs.length})
+              </span>
+            </div>
+            {showLogs ? (
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </button>
+          {showLogs && (
+            <div
+              ref={logContainerRef}
+              className="max-h-48 overflow-y-auto bg-background/50 p-2 font-mono text-xs space-y-0.5"
+            >
+              {logs.map((log, i) => (
+                <div key={i} className={`${logTypeColors[log.type]} leading-relaxed`}>
+                  <span className="text-muted-foreground/60">
+                    [{log.timestamp.toLocaleTimeString()}]
+                  </span>{" "}
+                  {log.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
