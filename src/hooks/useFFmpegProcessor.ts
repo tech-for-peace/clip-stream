@@ -262,22 +262,27 @@ export function useFFmpegProcessor() {
         // Check if input video has audio by analyzing FFmpeg output
         addLog("info", "Checking for audio track...");
         let hasInputAudio = false;
-        
+
         // Use ffprobe-style check - look for audio stream info in the logs
         const audioCheckLogs: string[] = [];
         const logHandler = ({ message }: { message: string }) => {
           audioCheckLogs.push(message);
         };
         ffmpeg.on("log", logHandler);
-        
+
         await ffmpeg.exec(["-i", "input.mp4", "-hide_banner"]);
-        
+
         // Check if any log mentions an audio stream
-        hasInputAudio = audioCheckLogs.some(log => 
-          log.includes("Audio:") || log.includes("Stream #") && log.includes("audio")
+        hasInputAudio = audioCheckLogs.some(
+          (log) =>
+            log.includes("Audio:") ||
+            (log.includes("Stream #") && log.includes("audio")),
         );
-        
-        addLog("info", hasInputAudio ? "Audio track detected" : "No audio track found");
+
+        addLog(
+          "info",
+          hasInputAudio ? "Audio track detected" : "No audio track found",
+        );
 
         if (config.audioFile) {
           addLog("info", `Loading audio file: ${config.audioFile.name}`);
@@ -289,7 +294,10 @@ export function useFFmpegProcessor() {
         // Determine if we should process audio
         const processAudio = config.audioFile || hasInputAudio;
         if (!processAudio) {
-          addLog("warn", "Input video has no audio track - processing video only");
+          addLog(
+            "warn",
+            "Input video has no audio track - processing video only",
+          );
         }
 
         const fadeDuration = config.fadeDuration;
@@ -338,7 +346,9 @@ export function useFFmpegProcessor() {
         let filterComplex: string;
         if (processAudio) {
           const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
-          filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(";");
+          filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(
+            ";",
+          );
         } else {
           const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
           filterComplex = [...videoFilters, concatFilter].join(";");
@@ -349,11 +359,11 @@ export function useFFmpegProcessor() {
           args.push("-i", "input_audio");
         }
         args.push("-filter_complex", filterComplex, "-map", "[outv]");
-        
+
         if (processAudio) {
           args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
         }
-        
+
         args.push(
           "-c:v",
           "libx264",
