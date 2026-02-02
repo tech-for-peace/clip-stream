@@ -117,10 +117,6 @@ const Index = () => {
       <footer className="border-t border-border/50 mt-12">
         <div className="container max-w-7xl mx-auto px-4 py-4 space-y-2">
           <p className="text-xs text-muted-foreground text-center">
-            ClipStream runs entirely in your browser. No data is sent to any
-            server.
-          </p>
-          <p className="text-xs text-muted-foreground text-center">
             Need advanced FFmpeg operations? Use{" "}
             <a
               href="https://ffmpeg.wide.video/"
@@ -131,6 +127,17 @@ const Index = () => {
               ffmpeg.wide.video
             </a>{" "}
             with ChatGPT to build complex commands.
+          </p>
+          <p className="text-xs text-muted-foreground text-center">
+            Made with ❤️ by{" "}
+            <a
+              href="https://techforpeace.co.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              techforpeace.co.in
+            </a>
           </p>
         </div>
       </footer>
