@@ -72,8 +72,19 @@ function timeToSeconds(time: string): number {
 
 function supportsMultiThreading(): boolean {
   try {
-    return typeof SharedArrayBuffer !== "undefined";
-  } catch {
+    const hasSharedArrayBuffer = typeof SharedArrayBuffer !== "undefined";
+    const isCrossOriginIsolated = !!(globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated;
+    
+    console.log("[FFmpeg] Multi-threading check:", {
+      hasSharedArrayBuffer,
+      crossOriginIsolated: isCrossOriginIsolated,
+      supported: hasSharedArrayBuffer && isCrossOriginIsolated,
+    });
+    
+    // SharedArrayBuffer requires cross-origin isolation
+    return hasSharedArrayBuffer && isCrossOriginIsolated;
+  } catch (e) {
+    console.warn("[FFmpeg] Multi-threading check failed:", e);
     return false;
   }
 }
@@ -95,6 +106,8 @@ export function useFFmpegProcessor() {
     if (ffmpegRef.current?.loaded) return;
 
     const useMultiThread = supportsMultiThreading();
+    console.log("[FFmpeg] Starting load, multi-thread:", useMultiThread);
+    
     setState((s) => ({
       ...s,
       isLoading: true,
@@ -108,7 +121,12 @@ export function useFFmpegProcessor() {
       const ffmpeg = new FFmpeg();
       ffmpegRef.current = ffmpeg;
 
-      ffmpeg.on("progress", ({ progress }) => {
+      ffmpeg.on("log", ({ message }) => {
+        console.log("[FFmpeg]", message);
+      });
+
+      ffmpeg.on("progress", ({ progress, time }) => {
+        console.log(`[FFmpeg] Progress: ${Math.round(progress * 100)}% (time: ${time})`);
         setState((s) => ({ ...s, progress: Math.round(progress * 100) }));
       });
 
