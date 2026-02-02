@@ -267,11 +267,12 @@ export function useFFmpegProcessor() {
         await ffmpeg.writeFile("input.mp4", videoData);
         addLog("info", "Video file loaded into memory");
 
-        // Check if input video has audio by analyzing FFmpeg output
-        addLog("info", "Checking for audio track...");
+        // Check video duration and audio by analyzing FFmpeg output
+        addLog("info", "Analyzing video file...");
         let hasInputAudio = false;
+        let videoDuration = 0;
 
-        // Use ffprobe-style check - look for audio stream info in the logs
+        // Capture logs during probe
         const audioCheckLogs: string[] = [];
         const logHandler = ({ message }: { message: string }) => {
           audioCheckLogs.push(message);
@@ -279,16 +280,25 @@ export function useFFmpegProcessor() {
         ffmpeg.on("log", logHandler);
 
         // Run probe command - this will log stream info
-        // Use -t 0 to not process any frames, just read metadata
-        const probeExitCode = await ffmpeg.exec([
+        await ffmpeg.exec([
           "-i", "input.mp4", 
           "-t", "0", 
           "-f", "null", 
           "-"
         ]);
-        
-        addLog("info", `Probe exit code: ${probeExitCode}, logs: ${audioCheckLogs.length}`);
-        addLog("info", `Probe logs: ${audioCheckLogs.slice(-5).join(" | ")}`);
+
+        // Parse duration from logs (format: "Duration: HH:MM:SS.xx")
+        const durationLog = audioCheckLogs.find(log => log.includes("Duration:"));
+        if (durationLog) {
+          const match = durationLog.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+          if (match) {
+            const hours = parseInt(match[1], 10);
+            const minutes = parseInt(match[2], 10);
+            const seconds = parseFloat(match[3]);
+            videoDuration = hours * 3600 + minutes * 60 + seconds;
+            addLog("info", `Video duration: ${videoDuration.toFixed(2)} seconds`);
+          }
+        }
 
         // Check if any log mentions an audio stream
         hasInputAudio = audioCheckLogs.some(
@@ -301,6 +311,24 @@ export function useFFmpegProcessor() {
           "info",
           hasInputAudio ? "Audio track detected" : "No audio track found",
         );
+
+        // Validate segment times against video duration
+        if (videoDuration > 0) {
+          for (const seg of config.segments) {
+            const startSec = timeToSeconds(seg.start);
+            const endSec = timeToSeconds(seg.end);
+            
+            if (startSec >= videoDuration) {
+              throw new Error(`Segment start time (${seg.start}) is beyond video duration (${videoDuration.toFixed(1)}s)`);
+            }
+            if (endSec > videoDuration) {
+              addLog("warn", `Segment end time (${seg.end}) exceeds video duration, clamping to ${videoDuration.toFixed(1)}s`);
+            }
+            if (startSec >= endSec) {
+              throw new Error(`Invalid segment: start (${seg.start}) must be before end (${seg.end})`);
+            }
+          }
+        }
 
         if (config.audioFile) {
           addLog("info", `Loading audio file: ${config.audioFile.name}`);
