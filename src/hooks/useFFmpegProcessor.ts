@@ -270,7 +270,15 @@ export function useFFmpegProcessor() {
         };
         ffmpeg.on("log", logHandler);
 
-        await ffmpeg.exec(["-i", "input.mp4", "-hide_banner"]);
+        try {
+          // This command will fail (no output) but logs stream info
+          await ffmpeg.exec(["-i", "input.mp4", "-hide_banner"]);
+        } catch {
+          // Expected to fail - we just want the logs
+        }
+
+        // Remove the temporary log handler to avoid interference
+        ffmpeg.off("log", logHandler);
 
         // Check if any log mentions an audio stream
         hasInputAudio = audioCheckLogs.some(
