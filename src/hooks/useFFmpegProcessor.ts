@@ -278,21 +278,23 @@ export function useFFmpegProcessor() {
         };
         ffmpeg.on("log", logHandler);
 
-        try {
-          // This command will fail (no output) but logs stream info
-          await ffmpeg.exec(["-i", "input.mp4", "-hide_banner"]);
-        } catch {
-          // Expected to fail - we just want the logs
-        }
-
-        // Remove the temporary log handler to avoid interference
-        ffmpeg.off("log", logHandler);
+        // Run probe command - this will log stream info
+        // Use -t 0 to not process any frames, just read metadata
+        const probeExitCode = await ffmpeg.exec([
+          "-i", "input.mp4", 
+          "-t", "0", 
+          "-f", "null", 
+          "-"
+        ]);
+        
+        addLog("info", `Probe exit code: ${probeExitCode}, logs: ${audioCheckLogs.length}`);
+        addLog("info", `Probe logs: ${audioCheckLogs.slice(-5).join(" | ")}`);
 
         // Check if any log mentions an audio stream
         hasInputAudio = audioCheckLogs.some(
           (log) =>
-            log.includes("Audio:") ||
-            (log.includes("Stream #") && log.includes("audio")),
+            log.toLowerCase().includes("audio:") ||
+            (log.toLowerCase().includes("stream") && log.toLowerCase().includes("audio")),
         );
 
         addLog(
@@ -400,10 +402,20 @@ export function useFFmpegProcessor() {
         addLog("info", `FFmpeg args: ${args.join(" ")}`);
 
         addLog("info", "Starting FFmpeg processing...");
-        await ffmpeg.exec(args);
+        const exitCode = await ffmpeg.exec(args);
+        
+        if (exitCode !== 0) {
+          throw new Error(`FFmpeg exited with code ${exitCode}`);
+        }
 
         addLog("info", "Reading output file...");
         const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
+        
+        if (data.length < 1000) {
+          addLog("error", `Output file is too small (${data.length} bytes), likely corrupted`);
+          throw new Error("Output file is corrupted or empty");
+        }
+        
         const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
         const url = URL.createObjectURL(blob);
 
