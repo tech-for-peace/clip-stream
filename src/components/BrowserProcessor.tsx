@@ -87,8 +87,11 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
           </span>
         )}
         {isReady && !isMultiThreaded && (
-          <span className="text-xs text-muted-foreground">
-            (single-threaded)
+          <span
+            className="text-xs text-muted-foreground cursor-help"
+            title="Multi-threading requires SharedArrayBuffer which needs cross-origin isolation. This is unavailable in embedded iframes. Publish and access via the published URL for multi-threaded processing."
+          >
+            (single-threaded - hover for info)
           </span>
         )}
       </div>
