@@ -17,10 +17,8 @@ export function generateFFmpegCommand(config: ClipConfig): string {
 
   const videoFileName = config.videoFile.name;
   const audioFileName = config.audioFile?.name;
-  const videoPath = `/path/to/${videoFileName}`;
-  const audioPath = audioFileName ? `/path/to/${audioFileName}` : null;
   const baseName = videoFileName.replace(/\.[^/.]+$/, '');
-  const outputPath = `/path/to/${baseName}_clipped.mp4`;
+  const outputName = `${baseName}_clipped.mp4`;
   const fadeDuration = config.fadeDuration;
   const numSegments = config.segments.length;
 
@@ -73,13 +71,13 @@ export function generateFFmpegCommand(config: ClipConfig): string {
   const filterComplex = allFilters.join(';\n  ');
 
   // Build the command
-  let cmd = `ffmpeg -i "${videoPath}"`;
-  if (audioPath) {
-    cmd += ` \\\n  -i "${audioPath}"`;
+  let cmd = `ffmpeg -i "${videoFileName}"`;
+  if (audioFileName) {
+    cmd += ` \\\n  -i "${audioFileName}"`;
   }
   cmd += ` \\\n  -filter_complex "\n  ${filterComplex}\n  "`;
   cmd += ` \\\n  -map "[outv]" -map "[outa]"`;
-  cmd += ` \\\n  -c:v libx264 -c:a aac "${outputPath}"`;
+  cmd += ` \\\n  -c:v libx264 -c:a aac "${outputName}"`;
 
   return cmd;
 }
