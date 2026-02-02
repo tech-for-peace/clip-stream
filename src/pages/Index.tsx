@@ -43,7 +43,7 @@ const Index = () => {
                 <span className="text-gradient">ClipStream</span>
               </h1>
               <p className="text-xs text-muted-foreground">
-                Clip, trim & merge videos — in-browser or via CLI
+                Fast video clipping in your browser
               </p>
             </div>
           </div>
