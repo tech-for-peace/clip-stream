@@ -3,6 +3,7 @@ import { FileUpload } from "@/components/FileUpload";
 import { TimeSegmentEditor } from "@/components/TimeSegmentEditor";
 import { GlobalFadeSettings } from "@/components/GlobalFadeSettings";
 import { CommandOutput } from "@/components/CommandOutput";
+import { BrowserProcessor } from "@/components/BrowserProcessor";
 import { InstallGuide } from "@/components/InstallGuide";
 
 import type { ClipConfig } from "@/types/clip";
@@ -99,6 +100,11 @@ const Index = () => {
 
           {/* Right Column - Output */}
           <div className="space-y-4">
+            {/* Browser Processor */}
+            <section className="glass-panel p-4">
+              <BrowserProcessor config={config} />
+            </section>
+
             {/* Command Output */}
             <section className="glass-panel p-4">
               <CommandOutput command={command} />
