@@ -9,6 +9,7 @@ import {
   Terminal,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFFmpegProcessor, type LogEntry } from "@/hooks/useFFmpegProcessor";
@@ -45,8 +46,10 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     error,
     outputUrl,
     logs,
+    isCancelling,
     load,
     process,
+    cancel,
     reset,
   } = useFFmpegProcessor();
 
@@ -123,16 +126,39 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
 
       {isProcessing && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Processing... {progress}%
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {isCancelling
+                ? "Cancelling... Please wait"
+                : "Processing..."}{" "}
+              {progress}%
+            </div>
+            {!isCancelling && (
+              <Button
+                onClick={cancel}
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Cancel
+              </Button>
+            )}
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
-              className="h-full bg-primary transition-all duration-300"
+              className={`h-full transition-all duration-300 ${
+                isCancelling ? "bg-orange-500 animate-pulse" : "bg-primary"
+              }`}
               style={{ width: `${progress}%` }}
             />
           </div>
+          {isCancelling && (
+            <p className="text-xs text-muted-foreground">
+              Waiting for FFmpeg to stop processing...
+            </p>
+          )}
         </div>
       )}
 

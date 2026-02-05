@@ -20,6 +20,7 @@ interface ProcessingState {
   error: string | null;
   outputUrl: string | null;
   logs: LogEntry[];
+  isCancelling: boolean;
 }
 
 // SHA-384 hashes for FFmpeg resources (version 0.12.10)
@@ -93,6 +94,8 @@ function supportsMultiThreading(): boolean {
 
 export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timeoutCancelledRef = useRef(false);
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
     loadProgress: 0,
@@ -103,6 +106,7 @@ export function useFFmpegProcessor() {
     error: null,
     outputUrl: null,
     logs: [],
+    isCancelling: false,
   });
 
   const addLog = useCallback((type: LogEntry["type"], message: string) => {
@@ -113,6 +117,35 @@ export function useFFmpegProcessor() {
   const clearLogs = useCallback(() => {
     setState((s) => ({ ...s, logs: [] }));
   }, []);
+
+  const cancel = useCallback(() => {
+    if (
+      abortControllerRef.current &&
+      !abortControllerRef.current.signal.aborted
+    ) {
+      abortControllerRef.current.abort();
+      addLog("warn", "Cancellation requested... Waiting for FFmpeg to stop...");
+      setState((s) => ({
+        ...s,
+        isCancelling: true,
+      }));
+
+      // Set a timeout to force cancellation if FFmpeg doesn't stop quickly
+      setTimeout(() => {
+        if (
+          abortControllerRef.current?.signal.aborted &&
+          !timeoutCancelledRef.current
+        ) {
+          timeoutCancelledRef.current = true;
+          addLog("warn", "FFmpeg did not stop in time, forcing cancellation");
+          setState((s) => ({
+            ...s,
+            error: "FFmpeg did not stop in time, forcing cancellation",
+          }));
+        }
+      }, 5000); // 5 second timeout
+    }
+  }, [addLog]);
 
   const load = useCallback(async () => {
     if (ffmpegRef.current?.loaded) return;
@@ -164,7 +197,9 @@ export function useFFmpegProcessor() {
         const seconds = totalSeconds % 60;
         const timeStr =
           hours > 0
-            ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+            ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
+                .toString()
+                .padStart(2, "0")}`
             : `${minutes}:${seconds.toString().padStart(2, "0")}`;
         addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
         setState((s) => ({ ...s, progress: pct }));
@@ -250,23 +285,37 @@ export function useFFmpegProcessor() {
         return;
       }
 
+      // Create new abort controller for this processing session
+      abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
+
       clearLogs();
       addLog("info", `Processing ${config.segments.length} segment(s)...`);
 
       setState((s) => ({
         ...s,
         isProcessing: true,
+        isCancelling: false,
         progress: 0,
         error: null,
         outputUrl: null,
       }));
 
       try {
+        // Check if cancelled before starting
+        if (signal.aborted) {
+          throw new Error("Processing cancelled");
+        }
         // Write input files
         addLog("info", `Loading video file: ${config.videoFile.name}`);
         const videoData = await fetchFile(config.videoFile);
         await ffmpeg.writeFile("input.mp4", videoData);
         addLog("info", "Video file loaded into memory");
+
+        // Check if cancelled after loading video
+        if (signal.aborted) {
+          throw new Error("Processing cancelled");
+        }
 
         // Check video duration and audio by analyzing FFmpeg output
         addLog("info", "Analyzing video file...");
@@ -282,6 +331,11 @@ export function useFFmpegProcessor() {
 
         // Run probe command - this will log stream info
         await ffmpeg.exec(["-i", "input.mp4", "-t", "0", "-f", "null", "-"]);
+
+        // Check if cancelled after probe
+        if (signal.aborted) {
+          throw new Error("Processing cancelled");
+        }
 
         // Parse duration from logs (format: "Duration: HH:MM:SS.xx")
         const durationLog = audioCheckLogs.find((log) =>
@@ -324,13 +378,15 @@ export function useFFmpegProcessor() {
 
             if (startSec >= videoDuration) {
               throw new Error(
-                `Segment start time (${seg.start}) is beyond video duration (${videoDuration.toFixed(1)}s)`,
+                `Segment start time (${seg.start}) is beyond video ` +
+                  `duration (${videoDuration.toFixed(1)}s)`,
               );
             }
             if (endSec > videoDuration) {
               addLog(
                 "warn",
-                `Segment end time (${seg.end}) exceeds video duration, clamping to ${videoDuration.toFixed(1)}s`,
+                `Segment end time (${seg.end}) exceeds video duration, ` +
+                  `clamping to ${videoDuration.toFixed(1)}s`,
               );
             }
             if (startSec >= endSec) {
@@ -346,6 +402,11 @@ export function useFFmpegProcessor() {
           const audioData = await fetchFile(config.audioFile);
           await ffmpeg.writeFile("input_audio", audioData);
           addLog("info", "Audio file loaded into memory");
+
+          // Check if cancelled after loading audio
+          if (signal.aborted) {
+            throw new Error("Processing cancelled");
+          }
         }
 
         // Determine if we should process audio
@@ -446,7 +507,10 @@ export function useFFmpegProcessor() {
               vFilter += `,fade=t=in:st=0:d=${fadeDuration}`;
             }
             if (shouldFadeOut) {
-              vFilter += `,fade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
+              vFilter += `,fade=t=out:st=${Math.max(
+                0,
+                duration - fadeDuration,
+              )}:d=${fadeDuration}`;
             }
             vFilter += `[v${i}]`;
             videoFilters.push(vFilter);
@@ -458,7 +522,10 @@ export function useFFmpegProcessor() {
                 aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
               }
               if (shouldFadeOut) {
-                aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
+                aFilter += `,afade=t=out:st=${Math.max(
+                  0,
+                  duration - fadeDuration,
+                )}:d=${fadeDuration}`;
               }
               aFilter += `[a${i}]`;
               audioFilters.push(aFilter);
@@ -470,7 +537,9 @@ export function useFFmpegProcessor() {
 
           let filterComplex: string;
           if (withAudio) {
-            const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
+            const concatFilter = `${concatInputs.join(
+              "",
+            )}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
             filterComplex = [
               ...videoFilters,
               ...audioFilters,
@@ -531,6 +600,12 @@ export function useFFmpegProcessor() {
           addLog("info", `Command: ffmpeg ${args.join(" ")}`);
 
           addLog("info", "Starting FFmpeg processing...");
+
+          // Check if cancelled before FFmpeg exec
+          if (signal.aborted) {
+            throw new Error("Processing cancelled");
+          }
+
           const exitCode = await ffmpeg.exec(args);
 
           if (exitCode !== 0) {
@@ -556,6 +631,12 @@ export function useFFmpegProcessor() {
           }
 
           addLog("info", "Reading output file...");
+
+          // Check if cancelled before reading output
+          if (signal.aborted) {
+            throw new Error("Processing cancelled");
+          }
+
           const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
 
           if (data.length < 1000) {
@@ -586,7 +667,15 @@ export function useFFmpegProcessor() {
 
           addLog(
             "info",
-            `Processing complete! Output size: ${(data.length / 1024 / 1024).toFixed(2)} MB${!attemptWithAudio && processAudio ? " (video only - audio failed)" : ""}`,
+            `Processing complete! Output size: ${(
+              data.length /
+              1024 /
+              1024
+            ).toFixed(2)} MB${
+              !attemptWithAudio && processAudio
+                ? " (video only - audio failed)"
+                : ""
+            }`,
           );
 
           setState((s) => ({
@@ -610,12 +699,29 @@ export function useFFmpegProcessor() {
       } catch (err) {
         const errorMsg =
           err instanceof Error ? err.message : "Processing failed";
-        addLog("error", errorMsg);
-        setState((s) => ({
-          ...s,
-          isProcessing: false,
-          error: errorMsg,
-        }));
+
+        // Check if this was a cancellation
+        if (signal.aborted || errorMsg === "Processing cancelled") {
+          addLog("warn", "Processing cancelled by user");
+          setState((s) => ({
+            ...s,
+            isProcessing: false,
+            isCancelling: false,
+            progress: 0,
+            error: "Processing cancelled",
+          }));
+        } else {
+          addLog("error", errorMsg);
+          setState((s) => ({
+            ...s,
+            isProcessing: false,
+            isCancelling: false,
+            error: errorMsg,
+          }));
+        }
+
+        // Reset timeout flag
+        timeoutCancelledRef.current = false;
       }
     },
     [addLog, clearLogs],
@@ -625,6 +731,8 @@ export function useFFmpegProcessor() {
     if (state.outputUrl) {
       URL.revokeObjectURL(state.outputUrl);
     }
+    // Reset timeout flag
+    timeoutCancelledRef.current = false;
     setState((s) => ({
       ...s,
       isProcessing: false,
@@ -639,6 +747,7 @@ export function useFFmpegProcessor() {
     isReady: ffmpegRef.current?.loaded ?? false,
     load,
     process,
+    cancel,
     reset,
     clearLogs,
   };
