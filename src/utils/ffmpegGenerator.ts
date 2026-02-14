@@ -1,6 +1,23 @@
 import type { ClipConfig } from "@/types/clip";
 import { timeToSeconds } from "@/utils/timeUtils";
 
+/**
+ * Sanitize a filename/path for safe shell command embedding.
+ * Escapes characters that could enable command injection when
+ * the generated command is copied and executed in a terminal.
+ */
+function shellEscape(str: string): string {
+  // Replace backslashes first, then escape all shell-sensitive characters
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`")
+    .replace(/!/g, "\\!")
+    .replace(/\n/g, "")
+    .replace(/\r/g, "");
+}
+
 // Extended File interface to include path property for desktop environments
 // Browser File objects don't expose paths for security reasons
 // But in Electron/NW.js apps, the File object may have a path property
@@ -16,16 +33,18 @@ export function generateFFmpegCommand(config: ClipConfig): string {
   const videoFileWithPath = config.videoFile as FileWithPath;
   const audioFileWithPath = config.audioFile as FileWithPath | undefined;
 
-  const videoFilePath = videoFileWithPath.path || config.videoFile.name;
-  const audioFilePath =
-    audioFileWithPath?.path ||
-    (config.audioFile ? config.audioFile.name : undefined);
+  const videoFilePath = shellEscape(videoFileWithPath.path || config.videoFile.name);
+  const audioFilePath = audioFileWithPath?.path
+    ? shellEscape(audioFileWithPath.path)
+    : config.audioFile
+      ? shellEscape(config.audioFile.name)
+      : undefined;
 
-  const baseName = config.videoFile.name.replace(/\.[^/.]+$/, "");
+  const baseName = config.videoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.[^/.]+$/, "");
   const outputName = `${baseName}-clipped.mp4`;
 
   const outputPath = videoFileWithPath.path
-    ? `${videoFileWithPath.path.replace(/[^/]*$/, "")}${outputName}`
+    ? `${shellEscape(videoFileWithPath.path.replace(/[^/]*$/, ""))}${outputName}`
     : outputName;
 
   const fadeDuration = config.fadeDuration;
