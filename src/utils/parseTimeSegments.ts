@@ -1,4 +1,5 @@
 import type { TimeSegment } from "@/types/clip";
+import { isValidTimeString } from "@/utils/timeUtils";
 
 // Generate simple unique IDs without external dependency
 function generateId(): string {
@@ -24,13 +25,18 @@ export function parseTimeSegments(input: string): TimeSegment[] {
     );
 
     if (match) {
-      segments.push({
-        id: generateId(),
-        start: match[1],
-        end: match[2],
-        fadeIn: false,
-        fadeOut: false,
-      });
+      const start = match[1];
+      const end = match[2];
+      // Only add segment if both times are valid
+      if (isValidTimeString(start) && isValidTimeString(end)) {
+        segments.push({
+          id: generateId(),
+          start,
+          end,
+          fadeIn: false,
+          fadeOut: false,
+        });
+      }
     }
   }
 
