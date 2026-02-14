@@ -60,9 +60,10 @@ async function verifyAndFetchResource(
 
   const expectedHash = RESOURCE_HASHES[resourceKey];
   if (expectedHash && calculatedHash !== expectedHash) {
-    console.warn(
-      `Hash mismatch for ${resourceKey}. Expected: ${expectedHash}, Got: ${calculatedHash}. ` +
-        "This could indicate CDN tampering or a version mismatch.",
+    throw new Error(
+      `Security error: integrity check failed for ${resourceKey}. ` +
+        `Expected: ${expectedHash}, Got: ${calculatedHash}. ` +
+        "The CDN resource may have been tampered with. Aborting load.",
     );
   }
 
