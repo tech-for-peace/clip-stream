@@ -124,6 +124,56 @@ function parseCommand(command: string): { args: string[]; outputFile: string } {
   return { args, outputFile };
 }
 
+/** Blocked protocols that could attempt network or local file access */
+const BLOCKED_PROTOCOLS = ["http:", "https:", "ftp:", "rtmp:", "rtsp:", "file:", "pipe:", "data:", "tcp:", "udp:", "tls:"];
+
+/** Filters that can read arbitrary files */
+const BLOCKED_FILTERS = ["movie", "amovie", "lavfi"];
+
+/** Max input file size: 500 MB */
+const MAX_FILE_SIZE = 500 * 1024 * 1024;
+
+/** Max processing time: 10 minutes */
+const MAX_PROCESSING_TIME_MS = 10 * 60 * 1000;
+
+/**
+ * Validate parsed FFmpeg args to block dangerous patterns.
+ * Returns an error string if invalid, or null if safe.
+ */
+function validateArgs(args: string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i].toLowerCase();
+
+    // Block protocol-based inputs/outputs
+    for (const proto of BLOCKED_PROTOCOLS) {
+      if (arg.includes(proto)) {
+        return `Blocked: protocol "${proto}" is not allowed. Only local file processing is supported.`;
+      }
+    }
+
+    // Block dangerous filters in filter_complex or -vf/-af values
+    if (
+      (args[i] === "-filter_complex" || args[i] === "-vf" || args[i] === "-af" ||
+       args[i] === "-lavfi") &&
+      i + 1 < args.length
+    ) {
+      const filterVal = args[i + 1].toLowerCase();
+      for (const f of BLOCKED_FILTERS) {
+        if (filterVal.includes(f)) {
+          return `Blocked: filter "${f}" is not allowed for security reasons.`;
+        }
+      }
+    }
+
+    // Block -lavfi as a standalone flag (can read files)
+    if (arg === "-lavfi") {
+      // Already checked filter value above, but flag itself is suspicious
+    }
+  }
+
+  return null;
+}
+
 export function useFFmpegRawProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const [state, setState] = useState<RawProcessorState>({
@@ -229,8 +279,13 @@ export function useFFmpegRawProcessor() {
       }));
 
       try {
-        // Write all input files
+        // Validate file sizes
         for (const { name, file } of files) {
+          if (file.size > MAX_FILE_SIZE) {
+            throw new Error(
+              `File "${name}" exceeds the ${MAX_FILE_SIZE / 1024 / 1024}MB size limit.`,
+            );
+          }
           addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
           const data = await fetchFile(file);
           await ffmpeg.writeFile(name, data);
@@ -238,9 +293,14 @@ export function useFFmpegRawProcessor() {
 
         const { args, outputFile } = parseCommand(command);
 
+        // Validate args for dangerous patterns
+        const validationError = validateArgs(args);
+        if (validationError) {
+          throw new Error(validationError);
+        }
+
         // Replace original filenames with mapped names in args
         const mappedArgs = args.map((arg) => {
-          // If this arg matches an output file path, replace with our output name
           if (arg === outputFile) return outputFile;
           return arg;
         });
@@ -248,7 +308,18 @@ export function useFFmpegRawProcessor() {
         addLog("info", `Command: ffmpeg ${mappedArgs.join(" ")}`);
         addLog("info", "Starting FFmpeg processing...");
 
-        const exitCode = await ffmpeg.exec(mappedArgs);
+        // Run with a processing timeout
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(
+            () => reject(new Error("Processing timed out after 10 minutes. Try a shorter or simpler operation.")),
+            MAX_PROCESSING_TIME_MS,
+          );
+        });
+
+        const exitCode = await Promise.race([
+          ffmpeg.exec(mappedArgs),
+          timeoutPromise,
+        ]);
 
         if (exitCode !== 0) {
           throw new Error(`FFmpeg exited with code ${exitCode}`);
