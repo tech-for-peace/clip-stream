@@ -8,7 +8,9 @@ import { InstallGuide } from "@/components/InstallGuide";
 
 import type { ClipConfig } from "@/types/clip";
 import { generateFFmpegCommand } from "@/utils/ffmpegGenerator";
-import { Scissors, Sparkles } from "lucide-react";
+import { Scissors, Sparkles, Wand2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const [config, setConfig] = useState<ClipConfig>({
@@ -34,18 +36,26 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 glow-border">
-              <Scissors className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 glow-border">
+                <Scissors className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight">
+                  <span className="text-gradient">ClipStream</span>
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Fast video clipping in your browser
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">
-                <span className="text-gradient">ClipStream</span>
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Fast video clipping in your browser
-              </p>
-            </div>
+            <Link to="/a">
+              <Button variant="ghost" size="sm" className="text-xs">
+                <Wand2 className="h-3.5 w-3.5 mr-1" />
+                Advanced Mode
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
