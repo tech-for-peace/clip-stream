@@ -30,11 +30,20 @@ import { useFFmpegRawProcessor, type LogEntry } from "@/hooks/useFFmpegRawProces
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
+interface FileMetadata {
+  duration?: number;
+  width?: number;
+  height?: number;
+  hasAudio?: boolean;
+  hasVideo?: boolean;
+}
+
 interface UploadedFile {
   id: string;
   file: File;
   type: "video" | "audio";
   mappedName: string;
+  metadata?: FileMetadata;
 }
 
 const logTypeColors: Record<LogEntry["type"], string> = {
@@ -58,6 +67,20 @@ const phaseLabels: Record<string, string> = {
   worker: "Loading multi-thread worker...",
   ready: "Ready",
 };
+function formatDuration(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "Unknown";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
 
 export default function Advanced() {
   const [step, setStep] = useState(0);
@@ -84,8 +107,10 @@ export default function Advanced() {
 
     const fileDescriptions = files
       .map((f, i) => {
-        const sizeMB = (f.file.size / 1024 / 1024).toFixed(2);
-        return `- File ${i + 1}: "${f.mappedName}" (${f.type}, ${sizeMB} MB, original: "${f.file.name}")`;
+        const parts = [`${f.type}`, formatFileSize(f.file.size)];
+        if (f.metadata?.duration) parts.push(`duration: ${formatDuration(f.metadata.duration)}`);
+        if (f.metadata?.width && f.metadata?.height) parts.push(`${f.metadata.width}x${f.metadata.height}`);
+        return `- File ${i + 1}: "${f.mappedName}" (${parts.join(", ")}, original: "${f.file.name}")`;
       })
       .join("\n");
 
@@ -116,10 +141,30 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     const ext = file.name.split(".").pop() || (type === "video" ? "mp4" : "mp3");
     const idx = files.filter((f) => f.type === type).length;
     const mappedName = `input_${type}${idx > 0 ? idx + 1 : ""}.${ext}`;
-    setFiles((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), file, type, mappedName },
-    ]);
+    const id = crypto.randomUUID();
+    setFiles((prev) => [...prev, { id, file, type, mappedName }]);
+
+    // Extract metadata asynchronously
+    const url = URL.createObjectURL(file);
+    const el = document.createElement(type === "video" ? "video" : "audio");
+    el.preload = "metadata";
+    el.onloadedmetadata = () => {
+      const meta: FileMetadata = {
+        duration: el.duration,
+        hasAudio: type === "audio" || true,
+        hasVideo: type === "video",
+      };
+      if (el instanceof HTMLVideoElement) {
+        meta.width = el.videoWidth;
+        meta.height = el.videoHeight;
+      }
+      setFiles((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, metadata: meta } : f)),
+      );
+      URL.revokeObjectURL(url);
+    };
+    el.onerror = () => URL.revokeObjectURL(url);
+    el.src = url;
   };
 
   const removeFile = (id: string) => {
@@ -271,8 +316,54 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               <h2 className="text-sm font-semibold">Describe what you want to do</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Explain in plain language what you'd like to do with your files. Be specific about timing, effects, formats, etc.
+              Review your file details below, then describe what you'd like to do.
             </p>
+
+            {/* File metadata cards */}
+            <div className="space-y-2">
+              {files.map((f) => (
+                <div key={f.id} className="segment-card flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
+                    {f.type === "video" ? (
+                      <Video className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Music className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{f.file.name}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        <span className="text-foreground/70 font-medium">Size:</span> {formatFileSize(f.file.size)}
+                      </span>
+                      {f.metadata?.duration != null && (
+                        <span className="text-xs text-muted-foreground">
+                          <span className="text-foreground/70 font-medium">Duration:</span> {formatDuration(f.metadata.duration)}
+                        </span>
+                      )}
+                      {f.metadata?.width != null && f.metadata?.height != null && (
+                        <span className="text-xs text-muted-foreground">
+                          <span className="text-foreground/70 font-medium">Resolution:</span> {f.metadata.width}×{f.metadata.height}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        <span className="text-foreground/70 font-medium">Type:</span> {f.file.type || f.type}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        <span className="text-foreground/70 font-medium">Mapped:</span>{" "}
+                        <code className="font-mono text-primary text-[10px]">{f.mappedName}</code>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-border/30 pt-4">
+              <p className="text-xs text-muted-foreground mb-2">
+                Describe what you'd like to do with your files. Be specific about timing, effects, formats, etc.
+              </p>
+            </div>
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
