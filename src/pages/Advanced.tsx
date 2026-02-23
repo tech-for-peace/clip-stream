@@ -208,35 +208,36 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container max-w-5xl mx-auto px-4 py-4">
+        <div className="container max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 glow-border">
-                <Wand2 className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-primary/20 glow-border">
+                <Wand2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">
+                <h1 className="text-base sm:text-xl font-bold tracking-tight">
                   <span className="text-gradient">ClipStream</span>
-                  <span className="text-muted-foreground font-normal text-sm ml-2">Advanced</span>
+                  <span className="text-muted-foreground font-normal text-xs sm:text-sm ml-1.5 sm:ml-2">Advanced</span>
                 </h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
                   AI-guided video & audio processing
                 </p>
               </div>
             </div>
             <Link to="/">
-              <Button variant="ghost" size="sm" className="text-xs">
+              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 sm:h-8 sm:px-3">
                 <Scissors className="h-3.5 w-3.5 mr-1" />
-                Simple Mode
+                <span className="hidden sm:inline">Simple Mode</span>
+                <span className="sm:hidden">Simple</span>
               </Button>
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <main className="container max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* Step Indicator */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-1 sm:gap-2 overflow-x-auto">
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             const isActive = i === step;
@@ -246,14 +247,14 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                 key={s.label}
                 onClick={() => i <= step && setStep(i)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                  "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-all whitespace-nowrap shrink-0",
                   isActive && "bg-primary text-primary-foreground",
                   isDone && "bg-primary/20 text-primary cursor-pointer",
                   !isActive && !isDone && "bg-secondary text-muted-foreground",
                 )}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {s.label}
+                <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                <span className="hidden xs:inline sm:inline">{s.label}</span>
               </button>
             );
           })}
@@ -261,16 +262,16 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
         {/* Step 0: Upload Files */}
         {step === 0 && (
-          <div className="glass-panel p-6 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="glass-panel p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 mb-1">
               <Upload className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold">Upload your media files</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Add one or more video/audio files you want to process. These will be loaded into the browser for processing.
+              Add video/audio files to process in-browser.
             </p>
 
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <FileDropZone type="video" onFile={(f) => addFile(f, "video")} />
               <FileDropZone type="audio" onFile={(f) => addFile(f, "audio")} />
             </div>
@@ -310,10 +311,10 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
         {/* Step 1: Describe what to do */}
         {step === 1 && (
-          <div className="glass-panel p-6 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="glass-panel p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 mb-1">
               <MessageSquare className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Describe what you want to do</h2>
+              <h2 className="text-sm font-semibold">Describe what you want</h2>
             </div>
             <p className="text-xs text-muted-foreground">
               Review your file details below, then describe what you'd like to do.
@@ -395,19 +396,19 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
         {/* Step 2: Get Command from ChatGPT */}
         {step === 2 && (
-          <div className="glass-panel p-6 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="glass-panel p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 mb-1">
               <Sparkles className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold">Get your FFmpeg command</h2>
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 mt-0.5">
+              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
                   <span className="text-sm font-bold text-primary">1</span>
                 </div>
-                <div className="space-y-2 flex-1">
-                  <p className="text-sm font-medium">Copy this prompt and paste it into ChatGPT</p>
+                <div className="space-y-2 flex-1 w-full">
+                  <p className="text-xs sm:text-sm font-medium">Copy this prompt and paste it into ChatGPT</p>
                   <div className="code-block p-3 max-h-[250px] overflow-y-auto scrollbar-thin">
                     <pre className="text-xs whitespace-pre-wrap break-words text-foreground/80">
                       {generatedPrompt}
@@ -441,12 +442,12 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 mt-0.5">
+              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
                   <span className="text-sm font-bold text-primary">2</span>
                 </div>
-                <div className="space-y-2 flex-1">
-                  <p className="text-sm font-medium">Paste the FFmpeg command you got back</p>
+                <div className="space-y-2 flex-1 w-full">
+                  <p className="text-xs sm:text-sm font-medium">Paste the FFmpeg command you got back</p>
                   <Textarea
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -461,8 +462,8 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
         {/* Step 3: Run & Preview */}
         {step === 3 && (
-          <div className="glass-panel p-6 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="glass-panel p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 mb-1">
               <Play className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold">Run & Preview</h2>
               {processor.isReady && processor.isMultiThreaded && (
@@ -623,7 +624,7 @@ function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: F
 
   return (
     <div
-      className={cn("file-drop-zone p-6 text-center", isDragging && "active")}
+      className={cn("file-drop-zone p-4 sm:p-6 text-center", isDragging && "active")}
       onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
       onDragOver={(e) => e.preventDefault()}
@@ -641,12 +642,12 @@ function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: F
         id={inputId}
       />
       <label htmlFor={inputId} className="cursor-pointer block">
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-            <Icon className="h-6 w-6 text-muted-foreground" />
+        <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-secondary">
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium">{label}</p>
-          <p className="text-xs text-muted-foreground">Drag & drop or click</p>
+          <p className="text-xs sm:text-sm font-medium">{label}</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground">Drop or click</p>
         </div>
       </label>
     </div>
