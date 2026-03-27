@@ -309,9 +309,18 @@ export function useFFmpegProcessor() {
         isProcessing: true,
         isCancelling: false,
         progress: 0,
+        elapsedSeconds: 0,
+        estimatedRemainingSeconds: null,
         error: null,
         outputUrl: null,
       }));
+
+      startTimeRef.current = Date.now();
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setState((s) => ({ ...s, elapsedSeconds: elapsed }));
+      }, 1000);
 
       try {
         // Check if cancelled before starting
