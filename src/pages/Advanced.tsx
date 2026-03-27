@@ -151,14 +151,17 @@ export default function Advanced() {
     );
 
     const estimateSize = (w: number, h: number) => {
-      const bitsPerPixel = 4;
-      const fps = 30;
-      const videoBitrate = w * h * bitsPerPixel * fps;
-      const audioBitrate = 128000;
-      const totalBytes = ((videoBitrate + audioBitrate) * totalDuration) / 8;
-      if (totalBytes >= 1024 * 1024 * 1024)
-        return `~${(totalBytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-      return `~${(totalBytes / 1024 / 1024).toFixed(0)} MB`;
+      const pixels = w * h;
+      const videoKbps =
+        pixels >= 1920 * 1080 ? 8000 :
+        pixels >= 1280 * 720  ? 4500 :
+        pixels >= 854 * 480   ? 2000 :
+        pixels >= 640 * 360   ? 1000 : 600;
+      const audioKbps = 128;
+      const totalMB = ((videoKbps + audioKbps) * totalDuration) / 8 / 1024;
+      if (totalMB >= 1024)
+        return `~${(totalMB / 1024).toFixed(1)} GB`;
+      return `~${Math.round(totalMB)} MB`;
     };
 
     const options: ExportQuality[] = [];
