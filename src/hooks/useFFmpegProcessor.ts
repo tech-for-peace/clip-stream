@@ -726,6 +726,7 @@ export function useFFmpegProcessor() {
         // Check if this was a cancellation
         if (signal.aborted || errorMsg === "Processing cancelled") {
           addLog("warn", "Processing cancelled by user");
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
@@ -734,6 +735,7 @@ export function useFFmpegProcessor() {
             error: "Processing cancelled",
           }));
         } else {
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           addLog("error", errorMsg);
           setState((s) => ({
             ...s,
