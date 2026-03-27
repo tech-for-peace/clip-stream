@@ -15,6 +15,8 @@ interface RawProcessorState {
   isMultiThreaded: boolean;
   isProcessing: boolean;
   progress: number;
+  elapsedSeconds: number;
+  estimatedRemainingSeconds: number | null;
   error: string | null;
   outputUrl: string | null;
   outputType: "video" | "audio" | null;
