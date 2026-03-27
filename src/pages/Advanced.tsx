@@ -133,6 +133,9 @@ ${prompt}
 8. Do NOT use hardware acceleration flags (no -hwaccel, no cuda, no vaapi)
 9. Do NOT use "-threads" flag (threading is handled by the runtime)
 10. Keep the command as a single ffmpeg command (no piping or chaining)
+11. When using scale filter, ALWAYS add "setsar=1" after it (e.g., scale=W:H,setsar=1) to force square pixels — this is critical when concatenating multiple streams to avoid SAR mismatch errors
+12. When concatenating streams with "concat" filter, ALL segments MUST have identical video parameters (resolution, SAR, fps, pixel format). Always normalize with: scale=W:H,fps=N,format=yuv420p,setsar=1
+13. If an input may lack audio, generate a silent audio track using: -f lavfi -t <duration> -i anullsrc=channel_layout=stereo:sample_rate=44100
 
 Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" directly.`;
   }, [files, prompt]);
