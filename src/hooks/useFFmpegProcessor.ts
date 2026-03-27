@@ -17,6 +17,8 @@ interface ProcessingState {
   isMultiThreaded: boolean;
   isProcessing: boolean;
   progress: number;
+  elapsedSeconds: number;
+  estimatedRemainingSeconds: number | null;
   error: string | null;
   outputUrl: string | null;
   logs: LogEntry[];
