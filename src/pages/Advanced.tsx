@@ -741,9 +741,9 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                     Processing... {processor.progress}%
                   </div>
                   <div className="flex gap-3 text-xs font-mono">
-                    <span>Elapsed: {formatSeconds(processor.elapsedSeconds)}</span>
+                    <span>Elapsed: {formatDuration(processor.elapsedSeconds)}</span>
                     {processor.estimatedRemainingSeconds != null && processor.estimatedRemainingSeconds > 0 && (
-                      <span>ETA: {formatSeconds(Math.round(processor.estimatedRemainingSeconds))}</span>
+                      <span>ETA: {formatDuration(Math.round(processor.estimatedRemainingSeconds))}</span>
                     )}
                   </div>
                 </div>
