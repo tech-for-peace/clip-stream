@@ -297,18 +297,7 @@ export function useFFmpegRawProcessor() {
         addLog("info", `Command: ffmpeg ${mappedArgs.join(" ")}`);
         addLog("info", "Starting FFmpeg processing...");
 
-        // Run with a processing timeout
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(
-            () => reject(new Error("Processing timed out after 10 minutes. Try a shorter or simpler operation.")),
-            MAX_PROCESSING_TIME_MS,
-          );
-        });
-
-        const exitCode = await Promise.race([
-          ffmpeg.exec(mappedArgs),
-          timeoutPromise,
-        ]);
+        const exitCode = await ffmpeg.exec(mappedArgs);
 
         if (exitCode !== 0) {
           throw new Error(`FFmpeg exited with code ${exitCode}`);
