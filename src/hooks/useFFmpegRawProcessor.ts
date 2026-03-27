@@ -274,13 +274,7 @@ export function useFFmpegRawProcessor() {
       }));
 
       try {
-        // Validate file sizes
         for (const { name, file } of files) {
-          if (file.size > MAX_FILE_SIZE) {
-            throw new Error(
-              `File "${name}" exceeds the ${MAX_FILE_SIZE / 1024 / 1024}MB size limit.`,
-            );
-          }
           addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
           const data = await fetchFile(file);
           await ffmpeg.writeFile(name, data);
