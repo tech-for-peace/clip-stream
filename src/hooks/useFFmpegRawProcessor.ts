@@ -195,6 +195,8 @@ function validateArgs(args: string[]): string | null {
 
 export function useFFmpegRawProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<RawProcessorState>({
     isLoading: false,
     loadProgress: 0,
@@ -202,6 +204,8 @@ export function useFFmpegRawProcessor() {
     isMultiThreaded: false,
     isProcessing: false,
     progress: 0,
+    elapsedSeconds: 0,
+    estimatedRemainingSeconds: null,
     error: null,
     outputUrl: null,
     outputType: null,
