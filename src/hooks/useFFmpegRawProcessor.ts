@@ -130,8 +130,8 @@ const BLOCKED_PROTOCOLS = ["http:", "https:", "ftp:", "rtmp:", "rtsp:", "file:",
 /** Filters that can read arbitrary files */
 const BLOCKED_FILTERS = ["movie", "amovie", "lavfi"];
 
-/** Max input file size: 500 MB */
-const MAX_FILE_SIZE = 500 * 1024 * 1024;
+/** Max input file size: 2 GB */
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
 
 /** Max processing time: 10 minutes */
 const MAX_PROCESSING_TIME_MS = 10 * 60 * 1000;
