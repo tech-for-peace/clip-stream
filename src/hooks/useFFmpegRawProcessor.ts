@@ -130,11 +130,6 @@ const BLOCKED_PROTOCOLS = ["http:", "https:", "ftp:", "rtmp:", "rtsp:", "file:",
 /** Filters that can read arbitrary files */
 const BLOCKED_FILTERS = ["movie", "amovie", "lavfi"];
 
-/** Max input file size: 2 GB */
-const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
-
-/** Max processing time: 10 minutes */
-const MAX_PROCESSING_TIME_MS = 10 * 60 * 1000;
 
 /**
  * Validate parsed FFmpeg args to block dangerous patterns.
@@ -279,13 +274,7 @@ export function useFFmpegRawProcessor() {
       }));
 
       try {
-        // Validate file sizes
         for (const { name, file } of files) {
-          if (file.size > MAX_FILE_SIZE) {
-            throw new Error(
-              `File "${name}" exceeds the ${MAX_FILE_SIZE / 1024 / 1024}MB size limit.`,
-            );
-          }
           addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
           const data = await fetchFile(file);
           await ffmpeg.writeFile(name, data);
@@ -308,18 +297,7 @@ export function useFFmpegRawProcessor() {
         addLog("info", `Command: ffmpeg ${mappedArgs.join(" ")}`);
         addLog("info", "Starting FFmpeg processing...");
 
-        // Run with a processing timeout
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(
-            () => reject(new Error("Processing timed out after 10 minutes. Try a shorter or simpler operation.")),
-            MAX_PROCESSING_TIME_MS,
-          );
-        });
-
-        const exitCode = await Promise.race([
-          ffmpeg.exec(mappedArgs),
-          timeoutPromise,
-        ]);
+        const exitCode = await ffmpeg.exec(mappedArgs);
 
         if (exitCode !== 0) {
           throw new Error(`FFmpeg exited with code ${exitCode}`);
