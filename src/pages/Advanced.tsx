@@ -319,8 +319,12 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     setCommand("");
   };
 
+  const videosStillLoading = files.some(
+    (f) => f.type === "video" && !f.metadata,
+  );
+
   const canProceed = [
-    files.length > 0,
+    files.length > 0 && !videosStillLoading,
     prompt.trim().length > 0,
     true, // step 2 always can proceed
     command.trim().length > 0,
@@ -467,7 +471,9 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   className="segment-card flex items-center gap-3"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
-                    {f.type === "video" ? (
+                    {f.type === "video" && !f.metadata ? (
+                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                    ) : f.type === "video" ? (
                       <Video className="h-4 w-4 text-primary" />
                     ) : (
                       <Music className="h-4 w-4 text-primary" />
@@ -851,16 +857,24 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          {step < 3 && (
-            <Button
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!canProceed[step]}
-              size="sm"
-            >
-              Next
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {step === 0 && videosStillLoading && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Analyzing files…
+              </span>
+            )}
+            {step < 3 && (
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!canProceed[step]}
+                size="sm"
+              >
+                Next
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
