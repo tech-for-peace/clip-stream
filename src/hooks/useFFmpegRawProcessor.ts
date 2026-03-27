@@ -439,6 +439,7 @@ export function useFFmpegRawProcessor() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Processing failed";
         addLog("error", msg);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({ ...s, isProcessing: false, error: msg }));
       }
     },
