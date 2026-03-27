@@ -17,6 +17,8 @@ interface ProcessingState {
   isMultiThreaded: boolean;
   isProcessing: boolean;
   progress: number;
+  elapsedSeconds: number;
+  estimatedRemainingSeconds: number | null;
   error: string | null;
   outputUrl: string | null;
   logs: LogEntry[];
@@ -97,6 +99,8 @@ export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timeoutCancelledRef = useRef(false);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
     loadProgress: 0,
@@ -104,6 +108,8 @@ export function useFFmpegProcessor() {
     isMultiThreaded: false,
     isProcessing: false,
     progress: 0,
+    elapsedSeconds: 0,
+    estimatedRemainingSeconds: null,
     error: null,
     outputUrl: null,
     logs: [],
@@ -203,7 +209,12 @@ export function useFFmpegProcessor() {
                 .padStart(2, "0")}`
             : `${minutes}:${seconds.toString().padStart(2, "0")}`;
         addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
-        setState((s) => ({ ...s, progress: pct }));
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        let remaining: number | null = null;
+        if (pct > 2 && pct < 100) {
+          remaining = Math.max(0, (elapsed / pct) * (100 - pct));
+        }
+        setState((s) => ({ ...s, progress: pct, estimatedRemainingSeconds: remaining }));
       });
 
       // Choose core based on browser support
@@ -298,9 +309,18 @@ export function useFFmpegProcessor() {
         isProcessing: true,
         isCancelling: false,
         progress: 0,
+        elapsedSeconds: 0,
+        estimatedRemainingSeconds: null,
         error: null,
         outputUrl: null,
       }));
+
+      startTimeRef.current = Date.now();
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setState((s) => ({ ...s, elapsedSeconds: elapsed }));
+      }, 1000);
 
       try {
         // Check if cancelled before starting
@@ -679,10 +699,12 @@ export function useFFmpegProcessor() {
             }`,
           );
 
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
             progress: 100,
+            estimatedRemainingSeconds: 0,
             outputUrl: url,
           }));
         }
@@ -704,6 +726,7 @@ export function useFFmpegProcessor() {
         // Check if this was a cancellation
         if (signal.aborted || errorMsg === "Processing cancelled") {
           addLog("warn", "Processing cancelled by user");
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
@@ -712,6 +735,7 @@ export function useFFmpegProcessor() {
             error: "Processing cancelled",
           }));
         } else {
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           addLog("error", errorMsg);
           setState((s) => ({
             ...s,

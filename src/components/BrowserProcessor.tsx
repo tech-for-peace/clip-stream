@@ -43,6 +43,8 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     isProcessing,
     isReady,
     progress,
+    elapsedSeconds,
+    estimatedRemainingSeconds,
     error,
     outputUrl,
     logs,
@@ -52,6 +54,15 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     cancel,
     reset,
   } = useFFmpegProcessor();
+
+  const formatTime = (secs: number): string => {
+    if (!isFinite(secs) || secs < 0) return "0:00";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -134,17 +145,25 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
                 : "Processing..."}{" "}
               {progress}%
             </div>
-            {!isCancelling && (
-              <Button
-                onClick={cancel}
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Cancel
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-3 text-xs font-mono text-muted-foreground">
+                <span>{formatTime(elapsedSeconds)}</span>
+                {estimatedRemainingSeconds != null && estimatedRemainingSeconds > 0 && (
+                  <span>ETA: {formatTime(Math.round(estimatedRemainingSeconds))}</span>
+                )}
+              </div>
+              {!isCancelling && (
+                <Button
+                  onClick={cancel}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancel
+                </Button>
+              )}
+            </div>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
