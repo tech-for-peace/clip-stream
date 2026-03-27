@@ -15,6 +15,8 @@ interface RawProcessorState {
   isMultiThreaded: boolean;
   isProcessing: boolean;
   progress: number;
+  elapsedSeconds: number;
+  estimatedRemainingSeconds: number | null;
   error: string | null;
   outputUrl: string | null;
   outputType: "video" | "audio" | null;
@@ -193,6 +195,8 @@ function validateArgs(args: string[]): string | null {
 
 export function useFFmpegRawProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<RawProcessorState>({
     isLoading: false,
     loadProgress: 0,
@@ -200,6 +204,8 @@ export function useFFmpegRawProcessor() {
     isMultiThreaded: false,
     isProcessing: false,
     progress: 0,
+    elapsedSeconds: 0,
+    estimatedRemainingSeconds: null,
     error: null,
     outputUrl: null,
     outputType: null,
@@ -247,7 +253,12 @@ export function useFFmpegRawProcessor() {
           "progress",
           `Progress: ${pct}% (time: ${m}:${s.toString().padStart(2, "0")})`,
         );
-        setState((prev) => ({ ...prev, progress: pct }));
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        let remaining: number | null = null;
+        if (pct > 2 && pct < 100) {
+          remaining = Math.max(0, (elapsed / pct) * (100 - pct));
+        }
+        setState((prev) => ({ ...prev, progress: pct, estimatedRemainingSeconds: remaining }));
       });
 
       const baseURL = useMultiThread
@@ -309,14 +320,24 @@ export function useFFmpegRawProcessor() {
       }
 
       clearLogs();
+      startTimeRef.current = Date.now();
       setState((s) => ({
         ...s,
         isProcessing: true,
         progress: 0,
+        elapsedSeconds: 0,
+        estimatedRemainingSeconds: null,
         error: null,
         outputUrl: null,
         outputType: null,
       }));
+
+      // Start elapsed timer
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setState((s) => ({ ...s, elapsedSeconds: elapsed }));
+      }, 1000);
 
       try {
         for (const { name, file } of files) {
@@ -392,10 +413,12 @@ export function useFFmpegRawProcessor() {
           `Done! Output: ${(data.length / 1024 / 1024).toFixed(2)} MB`,
         );
 
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({
           ...s,
           isProcessing: false,
           progress: 100,
+          estimatedRemainingSeconds: 0,
           outputUrl: url,
           outputType: isAudio ? "audio" : "video",
         }));
@@ -416,6 +439,7 @@ export function useFFmpegRawProcessor() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Processing failed";
         addLog("error", msg);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({ ...s, isProcessing: false, error: msg }));
       }
     },
