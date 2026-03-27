@@ -699,10 +699,12 @@ export function useFFmpegProcessor() {
             }`,
           );
 
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
             progress: 100,
+            estimatedRemainingSeconds: 0,
             outputUrl: url,
           }));
         }
