@@ -99,6 +99,8 @@ export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timeoutCancelledRef = useRef(false);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
     loadProgress: 0,
@@ -106,6 +108,8 @@ export function useFFmpegProcessor() {
     isMultiThreaded: false,
     isProcessing: false,
     progress: 0,
+    elapsedSeconds: 0,
+    estimatedRemainingSeconds: null,
     error: null,
     outputUrl: null,
     logs: [],
