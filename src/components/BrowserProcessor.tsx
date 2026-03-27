@@ -145,17 +145,25 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
                 : "Processing..."}{" "}
               {progress}%
             </div>
-            {!isCancelling && (
-              <Button
-                onClick={cancel}
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Cancel
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-3 text-xs font-mono text-muted-foreground">
+                <span>{formatTime(elapsedSeconds)}</span>
+                {estimatedRemainingSeconds != null && estimatedRemainingSeconds > 0 && (
+                  <span>ETA: {formatTime(Math.round(estimatedRemainingSeconds))}</span>
+                )}
+              </div>
+              {!isCancelling && (
+                <Button
+                  onClick={cancel}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancel
+                </Button>
+              )}
+            </div>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
