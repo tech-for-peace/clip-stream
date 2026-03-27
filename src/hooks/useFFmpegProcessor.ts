@@ -209,7 +209,12 @@ export function useFFmpegProcessor() {
                 .padStart(2, "0")}`
             : `${minutes}:${seconds.toString().padStart(2, "0")}`;
         addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
-        setState((s) => ({ ...s, progress: pct }));
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        let remaining: number | null = null;
+        if (pct > 2 && pct < 100) {
+          remaining = Math.max(0, (elapsed / pct) * (100 - pct));
+        }
+        setState((s) => ({ ...s, progress: pct, estimatedRemainingSeconds: remaining }));
       });
 
       // Choose core based on browser support
