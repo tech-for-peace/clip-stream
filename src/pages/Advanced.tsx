@@ -857,16 +857,24 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          {step < 3 && (
-            <Button
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!canProceed[step]}
-              size="sm"
-            >
-              Next
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {step === 0 && videosStillLoading && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Analyzing files…
+              </span>
+            )}
+            {step < 3 && (
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!canProceed[step]}
+                size="sm"
+              >
+                Next
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
