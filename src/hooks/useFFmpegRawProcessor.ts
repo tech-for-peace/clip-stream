@@ -253,7 +253,12 @@ export function useFFmpegRawProcessor() {
           "progress",
           `Progress: ${pct}% (time: ${m}:${s.toString().padStart(2, "0")})`,
         );
-        setState((prev) => ({ ...prev, progress: pct }));
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        let remaining: number | null = null;
+        if (pct > 2 && pct < 100) {
+          remaining = Math.max(0, (elapsed / pct) * (100 - pct));
+        }
+        setState((prev) => ({ ...prev, progress: pct, estimatedRemainingSeconds: remaining }));
       });
 
       const baseURL = useMultiThread
