@@ -43,6 +43,8 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     isProcessing,
     isReady,
     progress,
+    elapsedSeconds,
+    estimatedRemainingSeconds,
     error,
     outputUrl,
     logs,
@@ -52,6 +54,15 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     cancel,
     reset,
   } = useFFmpegProcessor();
+
+  const formatTime = (secs: number): string => {
+    if (!isFinite(secs) || secs < 0) return "0:00";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
