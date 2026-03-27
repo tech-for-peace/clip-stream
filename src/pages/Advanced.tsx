@@ -109,6 +109,84 @@ export default function Advanced() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processor.logs]);
 
+  // Detect resolution mismatches among video files
+  const videoFiles = useMemo(() => files.filter((f) => f.type === "video" && f.metadata?.width && f.metadata?.height), [files]);
+  
+  const resolutionsMismatch = useMemo(() => {
+    if (videoFiles.length < 2) return false;
+    const first = videoFiles[0];
+    return videoFiles.some((f) => f.metadata!.width !== first.metadata!.width || f.metadata!.height !== first.metadata!.height);
+  }, [videoFiles]);
+
+  const qualityOptions = useMemo((): ExportQuality[] => {
+    if (!resolutionsMismatch || videoFiles.length === 0) return [];
+    
+    const resolutions = videoFiles.map((f) => ({
+      w: f.metadata!.width!,
+      h: f.metadata!.height!,
+      pixels: f.metadata!.width! * f.metadata!.height!,
+    }));
+    
+    const highest = resolutions.reduce((a, b) => (b.pixels > a.pixels ? b : a));
+    const lowest = resolutions.reduce((a, b) => (b.pixels < a.pixels ? b : a));
+    
+    const totalDuration = files.reduce((sum, f) => sum + (f.metadata?.duration || 0), 0);
+    
+    const estimateSize = (w: number, h: number) => {
+      const bitsPerPixel = 4;
+      const fps = 30;
+      const videoBitrate = w * h * bitsPerPixel * fps;
+      const audioBitrate = 128000;
+      const totalBytes = ((videoBitrate + audioBitrate) * totalDuration) / 8;
+      if (totalBytes >= 1024 * 1024 * 1024) return `~${(totalBytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+      return `~${(totalBytes / 1024 / 1024).toFixed(0)} MB`;
+    };
+    
+    const options: ExportQuality[] = [];
+    
+    options.push({
+      label: `${highest.w}×${highest.h} (Highest)`,
+      width: highest.w,
+      height: highest.h,
+      description: `Best quality, largest file. Est. ${estimateSize(highest.w, highest.h)}`,
+    });
+    
+    const presets: [number, number, string][] = [
+      [1920, 1080, "1080p Full HD"],
+      [1280, 720, "720p HD"],
+      [854, 480, "480p SD"],
+    ];
+    
+    for (const [w, h, name] of presets) {
+      const pixels = w * h;
+      if (pixels < highest.pixels && pixels > lowest.pixels * 0.8) {
+        options.push({
+          label: `${w}×${h} (${name})`,
+          width: w,
+          height: h,
+          description: `Good balance. Est. ${estimateSize(w, h)}`,
+        });
+      }
+    }
+    
+    if (lowest.pixels < highest.pixels * 0.8) {
+      options.push({
+        label: `${lowest.w}×${lowest.h} (Lowest — fastest)`,
+        width: lowest.w,
+        height: lowest.h,
+        description: `Smallest file, fastest processing. Est. ${estimateSize(lowest.w, lowest.h)}`,
+      });
+    }
+    
+    return options;
+  }, [resolutionsMismatch, videoFiles, files]);
+
+  useEffect(() => {
+    if (qualityOptions.length > 0 && !selectedQuality) {
+      setSelectedQuality(`${qualityOptions[0].width}x${qualityOptions[0].height}`);
+    }
+  }, [qualityOptions, selectedQuality]);
+
   // Build the ChatGPT prompt
   const generatedPrompt = useMemo(() => {
     if (files.length === 0) return "";
@@ -122,13 +200,19 @@ export default function Advanced() {
       })
       .join("\n");
 
+    let resolutionNote = "";
+    if (selectedQuality && resolutionsMismatch) {
+      const [w, h] = selectedQuality.split("x").map(Number);
+      resolutionNote = `\n\n**Target output resolution:** ${w}×${h}. All video streams must be scaled to this resolution before any concatenation or merging.`;
+    }
+
     return `I need an FFmpeg command to process media files in my browser using ffmpeg.wasm (version 5.1.4).
 
 **My files:**
 ${fileDescriptions}
 
 **What I want to do:**
-${prompt}
+${prompt}${resolutionNote}
 
 **Important constraints for ffmpeg.wasm compatibility:**
 1. Use ONLY these input filenames exactly as listed above (e.g., ${files.map((f) => `"${f.mappedName}"`).join(", ")})
@@ -146,7 +230,7 @@ ${prompt}
 13. If an input may lack audio, generate a silent audio track using: -f lavfi -t <duration> -i anullsrc=channel_layout=stereo:sample_rate=44100
 
 Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" directly.`;
-  }, [files, prompt]);
+  }, [files, prompt, selectedQuality, resolutionsMismatch]);
 
   const addFile = (file: File, type: "video" | "audio") => {
     const ext = file.name.split(".").pop() || (type === "video" ? "mp4" : "mp3");
