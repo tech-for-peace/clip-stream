@@ -455,6 +455,50 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               ))}
             </div>
 
+            {/* Quality picker when resolutions differ */}
+            {resolutionsMismatch && qualityOptions.length > 0 && (
+              <div className="border border-amber-500/30 rounded-lg p-3 sm:p-4 bg-amber-500/5 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <p className="text-xs sm:text-sm font-medium text-amber-200">
+                    Your videos have different resolutions
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choose an output resolution. Smaller videos will be upscaled and larger ones downscaled to match.
+                </p>
+                <div className="grid gap-2">
+                  {qualityOptions.map((opt) => {
+                    const key = `${opt.width}x${opt.height}`;
+                    const isSelected = selectedQuality === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedQuality(key)}
+                        className={cn(
+                          "flex items-start gap-3 p-2.5 sm:p-3 rounded-lg border text-left transition-all",
+                          isSelected
+                            ? "border-primary bg-primary/10"
+                            : "border-border/50 bg-secondary/30 hover:bg-secondary/50",
+                        )}
+                      >
+                        <div className={cn(
+                          "mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center",
+                          isSelected ? "border-primary" : "border-muted-foreground/40",
+                        )}>
+                          {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="text-xs sm:text-sm font-medium">{opt.label}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="border-t border-border/30 pt-4">
               <p className="text-xs text-muted-foreground mb-2">
                 Describe what you'd like to do with your files. Be specific about timing, effects, formats, etc.
