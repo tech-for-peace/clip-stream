@@ -413,10 +413,12 @@ export function useFFmpegRawProcessor() {
           `Done! Output: ${(data.length / 1024 / 1024).toFixed(2)} MB`,
         );
 
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({
           ...s,
           isProcessing: false,
           progress: 100,
+          estimatedRemainingSeconds: 0,
           outputUrl: url,
           outputType: isAudio ? "audio" : "video",
         }));
