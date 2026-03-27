@@ -320,14 +320,24 @@ export function useFFmpegRawProcessor() {
       }
 
       clearLogs();
+      startTimeRef.current = Date.now();
       setState((s) => ({
         ...s,
         isProcessing: true,
         progress: 0,
+        elapsedSeconds: 0,
+        estimatedRemainingSeconds: null,
         error: null,
         outputUrl: null,
         outputType: null,
       }));
+
+      // Start elapsed timer
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setState((s) => ({ ...s, elapsedSeconds: elapsed }));
+      }, 1000);
 
       try {
         for (const { name, file } of files) {
