@@ -26,7 +26,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useFFmpegRawProcessor, type LogEntry } from "@/hooks/useFFmpegRawProcessor";
+import {
+  useFFmpegRawProcessor,
+  type LogEntry,
+} from "@/hooks/useFFmpegRawProcessor";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
@@ -72,12 +75,14 @@ function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  if (h > 0)
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (bytes >= 1024 * 1024 * 1024)
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
@@ -103,60 +108,74 @@ export default function Advanced() {
 
   useEffect(() => {
     processor.load();
-  }, [processor.load]);
+  }, [processor]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processor.logs]);
 
   // Detect resolution mismatches among video files
-  const videoFiles = useMemo(() => files.filter((f) => f.type === "video" && f.metadata?.width && f.metadata?.height), [files]);
-  
+  const videoFiles = useMemo(
+    () =>
+      files.filter(
+        (f) => f.type === "video" && f.metadata?.width && f.metadata?.height,
+      ),
+    [files],
+  );
+
   const resolutionsMismatch = useMemo(() => {
     if (videoFiles.length < 2) return false;
     const first = videoFiles[0];
-    return videoFiles.some((f) => f.metadata!.width !== first.metadata!.width || f.metadata!.height !== first.metadata!.height);
+    return videoFiles.some(
+      (f) =>
+        f.metadata!.width !== first.metadata!.width ||
+        f.metadata!.height !== first.metadata!.height,
+    );
   }, [videoFiles]);
 
   const qualityOptions = useMemo((): ExportQuality[] => {
     if (!resolutionsMismatch || videoFiles.length === 0) return [];
-    
+
     const resolutions = videoFiles.map((f) => ({
       w: f.metadata!.width!,
       h: f.metadata!.height!,
       pixels: f.metadata!.width! * f.metadata!.height!,
     }));
-    
+
     const highest = resolutions.reduce((a, b) => (b.pixels > a.pixels ? b : a));
     const lowest = resolutions.reduce((a, b) => (b.pixels < a.pixels ? b : a));
-    
-    const totalDuration = files.reduce((sum, f) => sum + (f.metadata?.duration || 0), 0);
-    
+
+    const totalDuration = files.reduce(
+      (sum, f) => sum + (f.metadata?.duration || 0),
+      0,
+    );
+
     const estimateSize = (w: number, h: number) => {
       const bitsPerPixel = 4;
       const fps = 30;
       const videoBitrate = w * h * bitsPerPixel * fps;
       const audioBitrate = 128000;
       const totalBytes = ((videoBitrate + audioBitrate) * totalDuration) / 8;
-      if (totalBytes >= 1024 * 1024 * 1024) return `~${(totalBytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+      if (totalBytes >= 1024 * 1024 * 1024)
+        return `~${(totalBytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
       return `~${(totalBytes / 1024 / 1024).toFixed(0)} MB`;
     };
-    
+
     const options: ExportQuality[] = [];
-    
+
     options.push({
       label: `${highest.w}×${highest.h} (Highest)`,
       width: highest.w,
       height: highest.h,
       description: `Best quality, largest file. Est. ${estimateSize(highest.w, highest.h)}`,
     });
-    
+
     const presets: [number, number, string][] = [
       [1920, 1080, "1080p Full HD"],
       [1280, 720, "720p HD"],
       [854, 480, "480p SD"],
     ];
-    
+
     for (const [w, h, name] of presets) {
       const pixels = w * h;
       if (pixels < highest.pixels && pixels > lowest.pixels * 0.8) {
@@ -168,7 +187,7 @@ export default function Advanced() {
         });
       }
     }
-    
+
     if (lowest.pixels < highest.pixels * 0.8) {
       options.push({
         label: `${lowest.w}×${lowest.h} (Lowest — fastest)`,
@@ -177,13 +196,15 @@ export default function Advanced() {
         description: `Smallest file, fastest processing. Est. ${estimateSize(lowest.w, lowest.h)}`,
       });
     }
-    
+
     return options;
   }, [resolutionsMismatch, videoFiles, files]);
 
   useEffect(() => {
     if (qualityOptions.length > 0 && !selectedQuality) {
-      setSelectedQuality(`${qualityOptions[0].width}x${qualityOptions[0].height}`);
+      setSelectedQuality(
+        `${qualityOptions[0].width}x${qualityOptions[0].height}`,
+      );
     }
   }, [qualityOptions, selectedQuality]);
 
@@ -194,8 +215,10 @@ export default function Advanced() {
     const fileDescriptions = files
       .map((f, i) => {
         const parts = [`${f.type}`, formatFileSize(f.file.size)];
-        if (f.metadata?.duration) parts.push(`duration: ${formatDuration(f.metadata.duration)}`);
-        if (f.metadata?.width && f.metadata?.height) parts.push(`${f.metadata.width}x${f.metadata.height}`);
+        if (f.metadata?.duration)
+          parts.push(`duration: ${formatDuration(f.metadata.duration)}`);
+        if (f.metadata?.width && f.metadata?.height)
+          parts.push(`${f.metadata.width}x${f.metadata.height}`);
         return `- File ${i + 1}: "${f.mappedName}" (${parts.join(", ")}, original: "${f.file.name}")`;
       })
       .join("\n");
@@ -233,7 +256,8 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
   }, [files, prompt, selectedQuality, resolutionsMismatch]);
 
   const addFile = (file: File, type: "video" | "audio") => {
-    const ext = file.name.split(".").pop() || (type === "video" ? "mp4" : "mp3");
+    const ext =
+      file.name.split(".").pop() || (type === "video" ? "mp4" : "mp3");
     const idx = files.filter((f) => f.type === type).length;
     const mappedName = `input_${type}${idx > 0 ? idx + 1 : ""}.${ext}`;
     const id = crypto.randomUUID();
@@ -312,7 +336,9 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               <div>
                 <h1 className="text-base sm:text-xl font-bold tracking-tight">
                   <span className="text-gradient">ClipStream</span>
-                  <span className="text-muted-foreground font-normal text-xs sm:text-sm ml-1.5 sm:ml-2">Advanced</span>
+                  <span className="text-muted-foreground font-normal text-xs sm:text-sm ml-1.5 sm:ml-2">
+                    Advanced
+                  </span>
                 </h1>
                 <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
                   AI-guided video & audio processing
@@ -320,7 +346,11 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               </div>
             </div>
             <Link to="/">
-              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 sm:h-8 sm:px-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7 px-2 sm:h-8 sm:px-3"
+              >
                 <Scissors className="h-3.5 w-3.5 mr-1" />
                 <span className="hidden sm:inline">Simple Mode</span>
                 <span className="sm:hidden">Simple</span>
@@ -373,9 +403,14 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
             {files.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Uploaded files:</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Uploaded files:
+                </p>
                 {files.map((f) => (
-                  <div key={f.id} className="segment-card flex items-center gap-3">
+                  <div
+                    key={f.id}
+                    className="segment-card flex items-center gap-3"
+                  >
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20">
                       {f.type === "video" ? (
                         <Video className="h-4 w-4 text-primary" />
@@ -384,9 +419,14 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{f.file.name}</p>
+                      <p className="text-sm font-medium truncate">
+                        {f.file.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        Mapped as: <code className="font-mono text-primary">{f.mappedName}</code>
+                        Mapped as:{" "}
+                        <code className="font-mono text-primary">
+                          {f.mappedName}
+                        </code>
                         {" · "}
                         {(f.file.size / 1024 / 1024).toFixed(2)} MB
                       </p>
@@ -412,13 +452,17 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               <h2 className="text-sm font-semibold">Describe what you want</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Review your file details below, then describe what you'd like to do.
+              Review your file details below, then describe what you'd like to
+              do.
             </p>
 
             {/* File metadata cards */}
             <div className="space-y-2">
               {files.map((f) => (
-                <div key={f.id} className="segment-card flex items-center gap-3">
+                <div
+                  key={f.id}
+                  className="segment-card flex items-center gap-3"
+                >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
                     {f.type === "video" ? (
                       <Video className="h-4 w-4 text-primary" />
@@ -427,27 +471,46 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{f.file.name}</p>
+                    <p className="text-sm font-medium truncate">
+                      {f.file.name}
+                    </p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                       <span className="text-xs text-muted-foreground">
-                        <span className="text-foreground/70 font-medium">Size:</span> {formatFileSize(f.file.size)}
+                        <span className="text-foreground/70 font-medium">
+                          Size:
+                        </span>{" "}
+                        {formatFileSize(f.file.size)}
                       </span>
                       {f.metadata?.duration != null && (
                         <span className="text-xs text-muted-foreground">
-                          <span className="text-foreground/70 font-medium">Duration:</span> {formatDuration(f.metadata.duration)}
+                          <span className="text-foreground/70 font-medium">
+                            Duration:
+                          </span>{" "}
+                          {formatDuration(f.metadata.duration)}
                         </span>
                       )}
-                      {f.metadata?.width != null && f.metadata?.height != null && (
-                        <span className="text-xs text-muted-foreground">
-                          <span className="text-foreground/70 font-medium">Resolution:</span> {f.metadata.width}×{f.metadata.height}
-                        </span>
-                      )}
+                      {f.metadata?.width != null &&
+                        f.metadata?.height != null && (
+                          <span className="text-xs text-muted-foreground">
+                            <span className="text-foreground/70 font-medium">
+                              Resolution:
+                            </span>{" "}
+                            {f.metadata.width}×{f.metadata.height}
+                          </span>
+                        )}
                       <span className="text-xs text-muted-foreground">
-                        <span className="text-foreground/70 font-medium">Type:</span> {f.file.type || f.type}
+                        <span className="text-foreground/70 font-medium">
+                          Type:
+                        </span>{" "}
+                        {f.file.type || f.type}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        <span className="text-foreground/70 font-medium">Mapped:</span>{" "}
-                        <code className="font-mono text-primary text-[10px]">{f.mappedName}</code>
+                        <span className="text-foreground/70 font-medium">
+                          Mapped:
+                        </span>{" "}
+                        <code className="font-mono text-primary text-[10px]">
+                          {f.mappedName}
+                        </code>
                       </span>
                     </div>
                   </div>
@@ -465,7 +528,8 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Choose an output resolution. Smaller videos will be upscaled and larger ones downscaled to match.
+                  Choose an output resolution. Smaller videos will be upscaled
+                  and larger ones downscaled to match.
                 </p>
                 <div className="grid gap-2">
                   {qualityOptions.map((opt) => {
@@ -482,15 +546,25 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                             : "border-border/50 bg-secondary/30 hover:bg-secondary/50",
                         )}
                       >
-                        <div className={cn(
-                          "mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center",
-                          isSelected ? "border-primary" : "border-muted-foreground/40",
-                        )}>
-                          {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
+                        <div
+                          className={cn(
+                            "mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center",
+                            isSelected
+                              ? "border-primary"
+                              : "border-muted-foreground/40",
+                          )}
+                        >
+                          {isSelected && (
+                            <div className="h-2 w-2 rounded-full bg-primary" />
+                          )}
                         </div>
                         <div>
-                          <p className="text-xs sm:text-sm font-medium">{opt.label}</p>
-                          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                          <p className="text-xs sm:text-sm font-medium">
+                            {opt.label}
+                          </p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                            {opt.description}
+                          </p>
                         </div>
                       </button>
                     );
@@ -501,7 +575,8 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
             <div className="border-t border-border/30 pt-4">
               <p className="text-xs text-muted-foreground mb-2">
-                Describe what you'd like to do with your files. Be specific about timing, effects, formats, etc.
+                Describe what you'd like to do with your files. Be specific
+                about timing, effects, formats, etc.
               </p>
             </div>
             <Textarea
@@ -547,14 +622,21 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   <span className="text-sm font-bold text-primary">1</span>
                 </div>
                 <div className="space-y-2 flex-1 w-full">
-                  <p className="text-xs sm:text-sm font-medium">Copy this prompt and paste it into ChatGPT</p>
+                  <p className="text-xs sm:text-sm font-medium">
+                    Copy this prompt and paste it into ChatGPT
+                  </p>
                   <div className="code-block p-3 max-h-[250px] overflow-y-auto scrollbar-thin">
                     <pre className="text-xs whitespace-pre-wrap break-words text-foreground/80">
                       {generatedPrompt}
                     </pre>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleCopyPrompt} size="sm" variant="outline" className="text-xs">
+                    <Button
+                      onClick={handleCopyPrompt}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                    >
                       {copiedPrompt ? (
                         <>
                           <Check className="h-3.5 w-3.5 mr-1 text-success" />
@@ -586,11 +668,13 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   <span className="text-sm font-bold text-primary">2</span>
                 </div>
                 <div className="space-y-2 flex-1 w-full">
-                  <p className="text-xs sm:text-sm font-medium">Paste the FFmpeg command you got back</p>
+                  <p className="text-xs sm:text-sm font-medium">
+                    Paste the FFmpeg command you got back
+                  </p>
                   <Textarea
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
-                    placeholder='Paste the ffmpeg command here, e.g.: ffmpeg -i input_video.mp4 -ss 90 -t 135 -c:v libx264 ...'
+                    placeholder="Paste the ffmpeg command here, e.g.: ffmpeg -i input_video.mp4 -ss 90 -t 135 -c:v libx264 ..."
                     className="min-h-[80px] bg-secondary/50 border-border/50 font-mono text-xs"
                   />
                 </div>
@@ -625,10 +709,14 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {phaseLabels[processor.loadPhase] || "Loading..."} {processor.loadProgress}%
+                  {phaseLabels[processor.loadPhase] || "Loading..."}{" "}
+                  {processor.loadProgress}%
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${processor.loadProgress}%` }} />
+                  <div
+                    className="h-full bg-primary/60 transition-all duration-300"
+                    style={{ width: `${processor.loadProgress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -649,7 +737,10 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   Processing... {processor.progress}%
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full bg-primary transition-all duration-300" style={{ width: `${processor.progress}%` }} />
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${processor.progress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -658,9 +749,17 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {processor.outputUrl && (
               <div className="space-y-3">
                 {processor.outputType === "video" ? (
-                  <video src={processor.outputUrl} controls className="w-full rounded-lg border border-border" />
+                  <video
+                    src={processor.outputUrl}
+                    controls
+                    className="w-full rounded-lg border border-border"
+                  />
                 ) : (
-                  <audio src={processor.outputUrl} controls className="w-full" />
+                  <audio
+                    src={processor.outputUrl}
+                    controls
+                    className="w-full"
+                  />
                 )}
                 <div className="flex gap-2">
                   <Button onClick={handleDownload} size="sm" className="flex-1">
@@ -697,15 +796,30 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
                   <div className="flex items-center gap-2">
                     <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="text-xs font-medium">Logs</span>
-                    <span className="text-xs text-muted-foreground">({processor.logs.length})</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({processor.logs.length})
+                    </span>
                   </div>
-                  {showLogs ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  {showLogs ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
                 </button>
                 {showLogs && (
-                  <div ref={logRef} className="max-h-48 overflow-y-auto bg-background/50 p-2 font-mono text-xs space-y-0.5">
+                  <div
+                    ref={logRef}
+                    className="max-h-48 overflow-y-auto bg-background/50 p-2 font-mono text-xs space-y-0.5"
+                  >
                     {processor.logs.map((log, i) => (
-                      <div key={i} className={`${logTypeColors[log.type]} leading-relaxed`}>
-                        <span className="text-muted-foreground/60">[{log.timestamp.toLocaleTimeString()}]</span> {log.message}
+                      <div
+                        key={i}
+                        className={`${logTypeColors[log.type]} leading-relaxed`}
+                      >
+                        <span className="text-muted-foreground/60">
+                          [{log.timestamp.toLocaleTimeString()}]
+                        </span>{" "}
+                        {log.message}
                       </div>
                     ))}
                   </div>
@@ -742,7 +856,12 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
         <footer className="border-t border-border/50 pt-4">
           <p className="text-xs text-muted-foreground text-center">
             Made with ❤️ by{" "}
-            <a href="https://techforpeace.co.in" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            <a
+              href="https://techforpeace.co.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
               techforpeace.co.in
             </a>
           </p>
@@ -754,7 +873,13 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
 
 /* ────────────────────────── File Drop Zone ────────────────────────── */
 
-function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: File) => void }) {
+function FileDropZone({
+  type,
+  onFile,
+}: {
+  type: "video" | "audio";
+  onFile: (f: File) => void;
+}) {
   const [isDragging, setIsDragging] = useState(false);
   const Icon = type === "video" ? Video : Music;
   const accept = type === "video" ? "video/*" : "audio/*,.mkv";
@@ -763,9 +888,18 @@ function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: F
 
   return (
     <div
-      className={cn("file-drop-zone p-4 sm:p-6 text-center", isDragging && "active")}
-      onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+      className={cn(
+        "file-drop-zone p-4 sm:p-6 text-center",
+        isDragging && "active",
+      )}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        setIsDragging(false);
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -776,7 +910,9 @@ function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: F
       <input
         type="file"
         accept={accept}
-        onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); }}
+        onChange={(e) => {
+          if (e.target.files?.[0]) onFile(e.target.files[0]);
+        }}
         className="hidden"
         id={inputId}
       />
@@ -786,7 +922,9 @@ function FileDropZone({ type, onFile }: { type: "video" | "audio"; onFile: (f: F
             <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
           </div>
           <p className="text-xs sm:text-sm font-medium">{label}</p>
-          <p className="text-[10px] sm:text-xs text-muted-foreground">Drop or click</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
+            Drop or click
+          </p>
         </div>
       </label>
     </div>

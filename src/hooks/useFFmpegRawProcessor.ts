@@ -41,7 +41,8 @@ async function verifyAndFetchResource(
   mimeType: string,
 ): Promise<string> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Failed to fetch ${url}: ${response.status}`);
   const buffer = await response.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest("SHA-384", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -49,7 +50,9 @@ async function verifyAndFetchResource(
   const calculatedHash = `sha384-${hashBase64}`;
   const expectedHash = RESOURCE_HASHES[resourceKey];
   if (expectedHash && calculatedHash !== expectedHash) {
-    throw new Error(`Security error: integrity check failed for ${resourceKey}. Aborting load.`);
+    throw new Error(
+      `Security error: integrity check failed for ${resourceKey}. Aborting load.`,
+    );
   }
   const blob = new Blob([buffer], { type: mimeType });
   return URL.createObjectURL(blob);
@@ -58,7 +61,9 @@ async function verifyAndFetchResource(
 function supportsMultiThreading(): boolean {
   try {
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== "undefined";
-    const isCrossOriginIsolated = !!(globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated;
+    const isCrossOriginIsolated = !!(
+      globalThis as { crossOriginIsolated?: boolean }
+    ).crossOriginIsolated;
     return hasSharedArrayBuffer && isCrossOriginIsolated;
   } catch {
     return false;
@@ -101,7 +106,11 @@ function parseCommand(command: string): { args: string[]; outputFile: string } {
       inDoubleQuote = !inDoubleQuote;
       continue;
     }
-    if ((char === " " || char === "\n" || char === "\t") && !inSingleQuote && !inDoubleQuote) {
+    if (
+      (char === " " || char === "\n" || char === "\t") &&
+      !inSingleQuote &&
+      !inDoubleQuote
+    ) {
       if (current) {
         args.push(current);
         current = "";
@@ -125,11 +134,22 @@ function parseCommand(command: string): { args: string[]; outputFile: string } {
 }
 
 /** Blocked protocols that could attempt network or local file access */
-const BLOCKED_PROTOCOLS = ["http:", "https:", "ftp:", "rtmp:", "rtsp:", "file:", "pipe:", "data:", "tcp:", "udp:", "tls:"];
+const BLOCKED_PROTOCOLS = [
+  "http:",
+  "https:",
+  "ftp:",
+  "rtmp:",
+  "rtsp:",
+  "file:",
+  "pipe:",
+  "data:",
+  "tcp:",
+  "udp:",
+  "tls:",
+];
 
 /** Filters that can read arbitrary files */
 const BLOCKED_FILTERS = ["movie", "amovie", "lavfi"];
-
 
 /**
  * Validate parsed FFmpeg args to block dangerous patterns.
@@ -148,8 +168,10 @@ function validateArgs(args: string[]): string | null {
 
     // Block dangerous filters in filter_complex or -vf/-af values
     if (
-      (args[i] === "-filter_complex" || args[i] === "-vf" || args[i] === "-af" ||
-       args[i] === "-lavfi") &&
+      (args[i] === "-filter_complex" ||
+        args[i] === "-vf" ||
+        args[i] === "-af" ||
+        args[i] === "-lavfi") &&
       i + 1 < args.length
     ) {
       const filterVal = args[i + 1].toLowerCase();
@@ -197,7 +219,10 @@ export function useFFmpegRawProcessor() {
     if (ffmpegRef.current?.loaded) return;
 
     const useMultiThread = supportsMultiThreading();
-    addLog("info", `Multi-threading: ${useMultiThread ? "enabled" : "disabled"}`);
+    addLog(
+      "info",
+      `Multi-threading: ${useMultiThread ? "enabled" : "disabled"}`,
+    );
 
     setState((s) => ({
       ...s,
@@ -218,7 +243,10 @@ export function useFFmpegRawProcessor() {
         const totalSeconds = Math.floor(time / 1000000);
         const m = Math.floor(totalSeconds / 60);
         const s = totalSeconds % 60;
-        addLog("progress", `Progress: ${pct}% (time: ${m}:${s.toString().padStart(2, "0")})`);
+        addLog(
+          "progress",
+          `Progress: ${pct}% (time: ${m}:${s.toString().padStart(2, "0")})`,
+        );
         setState((prev) => ({ ...prev, progress: pct }));
       });
 
@@ -228,21 +256,38 @@ export function useFFmpegRawProcessor() {
       const prefix = useMultiThread ? "core-mt" : "core";
 
       setState((s) => ({ ...s, loadProgress: 10, loadPhase: "core" }));
-      const coreURL = await verifyAndFetchResource(`${baseURL}/ffmpeg-core.js`, `${prefix}/ffmpeg-core.js`, "text/javascript");
+      const coreURL = await verifyAndFetchResource(
+        `${baseURL}/ffmpeg-core.js`,
+        `${prefix}/ffmpeg-core.js`,
+        "text/javascript",
+      );
 
       setState((s) => ({ ...s, loadProgress: 40, loadPhase: "wasm" }));
-      const wasmURL = await verifyAndFetchResource(`${baseURL}/ffmpeg-core.wasm`, `${prefix}/ffmpeg-core.wasm`, "application/wasm");
+      const wasmURL = await verifyAndFetchResource(
+        `${baseURL}/ffmpeg-core.wasm`,
+        `${prefix}/ffmpeg-core.wasm`,
+        "application/wasm",
+      );
 
       if (useMultiThread) {
         setState((s) => ({ ...s, loadProgress: 70, loadPhase: "worker" }));
-        const workerURL = await verifyAndFetchResource(`${baseURL}/ffmpeg-core.worker.js`, `${prefix}/ffmpeg-core.worker.js`, "text/javascript");
+        const workerURL = await verifyAndFetchResource(
+          `${baseURL}/ffmpeg-core.worker.js`,
+          `${prefix}/ffmpeg-core.worker.js`,
+          "text/javascript",
+        );
         await ffmpeg.load({ coreURL, wasmURL, workerURL });
       } else {
         setState((s) => ({ ...s, loadProgress: 80 }));
         await ffmpeg.load({ coreURL, wasmURL });
       }
 
-      setState((s) => ({ ...s, isLoading: false, loadProgress: 100, loadPhase: "ready" }));
+      setState((s) => ({
+        ...s,
+        isLoading: false,
+        loadProgress: 100,
+        loadPhase: "ready",
+      }));
       addLog("info", "FFmpeg ready");
     } catch (err) {
       setState((s) => ({
@@ -275,7 +320,10 @@ export function useFFmpegRawProcessor() {
 
       try {
         for (const { name, file } of files) {
-          addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+          addLog(
+            "info",
+            `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
+          );
           const data = await fetchFile(file);
           await ffmpeg.writeFile(name, data);
         }
@@ -312,18 +360,37 @@ export function useFFmpegRawProcessor() {
 
         // Determine output type from extension
         const ext = outputFile.split(".").pop()?.toLowerCase() || "mp4";
-        const isAudio = ["mp3", "wav", "aac", "ogg", "flac", "m4a", "opus"].includes(ext);
+        const isAudio = [
+          "mp3",
+          "wav",
+          "aac",
+          "ogg",
+          "flac",
+          "m4a",
+          "opus",
+        ].includes(ext);
         const mimeMap: Record<string, string> = {
-          mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", avi: "video/x-msvideo",
-          mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac", ogg: "audio/ogg",
-          flac: "audio/flac", m4a: "audio/mp4", opus: "audio/opus",
+          mp4: "video/mp4",
+          webm: "video/webm",
+          mkv: "video/x-matroska",
+          avi: "video/x-msvideo",
+          mp3: "audio/mpeg",
+          wav: "audio/wav",
+          aac: "audio/aac",
+          ogg: "audio/ogg",
+          flac: "audio/flac",
+          m4a: "audio/mp4",
+          opus: "audio/opus",
         };
         const mime = mimeMap[ext] || (isAudio ? "audio/mpeg" : "video/mp4");
 
         const blob = new Blob([new Uint8Array(data)], { type: mime });
         const url = URL.createObjectURL(blob);
 
-        addLog("info", `Done! Output: ${(data.length / 1024 / 1024).toFixed(2)} MB`);
+        addLog(
+          "info",
+          `Done! Output: ${(data.length / 1024 / 1024).toFixed(2)} MB`,
+        );
 
         setState((s) => ({
           ...s,
@@ -335,9 +402,17 @@ export function useFFmpegRawProcessor() {
 
         // Cleanup
         for (const { name } of files) {
-          try { await ffmpeg.deleteFile(name); } catch { /* ok */ }
+          try {
+            await ffmpeg.deleteFile(name);
+          } catch {
+            /* ok */
+          }
         }
-        try { await ffmpeg.deleteFile(outputFile); } catch { /* ok */ }
+        try {
+          await ffmpeg.deleteFile(outputFile);
+        } catch {
+          /* ok */
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Processing failed";
         addLog("error", msg);
@@ -349,7 +424,14 @@ export function useFFmpegRawProcessor() {
 
   const reset = useCallback(() => {
     if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
-    setState((s) => ({ ...s, isProcessing: false, progress: 0, error: null, outputUrl: null, outputType: null }));
+    setState((s) => ({
+      ...s,
+      isProcessing: false,
+      progress: 0,
+      error: null,
+      outputUrl: null,
+      outputType: null,
+    }));
   }, [state.outputUrl]);
 
   return {

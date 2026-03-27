@@ -33,14 +33,18 @@ export function generateFFmpegCommand(config: ClipConfig): string {
   const videoFileWithPath = config.videoFile as FileWithPath;
   const audioFileWithPath = config.audioFile as FileWithPath | undefined;
 
-  const videoFilePath = shellEscape(videoFileWithPath.path || config.videoFile.name);
+  const videoFilePath = shellEscape(
+    videoFileWithPath.path || config.videoFile.name,
+  );
   const audioFilePath = audioFileWithPath?.path
     ? shellEscape(audioFileWithPath.path)
     : config.audioFile
       ? shellEscape(config.audioFile.name)
       : undefined;
 
-  const baseName = config.videoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.[^/.]+$/, "");
+  const baseName = config.videoFile.name
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.[^/.]+$/, "");
   const outputName = `${baseName}-clipped.mp4`;
 
   const outputPath = videoFileWithPath.path
