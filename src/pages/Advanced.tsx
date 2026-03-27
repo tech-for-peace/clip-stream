@@ -735,9 +735,17 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {/* Processing */}
             {processor.isProcessing && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing... {processor.progress}%
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing... {processor.progress}%
+                  </div>
+                  <div className="flex gap-3 text-xs font-mono">
+                    <span>Elapsed: {formatSeconds(processor.elapsedSeconds)}</span>
+                    {processor.estimatedRemainingSeconds != null && processor.estimatedRemainingSeconds > 0 && (
+                      <span>ETA: {formatSeconds(Math.round(processor.estimatedRemainingSeconds))}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div
