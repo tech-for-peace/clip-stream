@@ -319,8 +319,12 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     setCommand("");
   };
 
+  const videosStillLoading = files.some(
+    (f) => f.type === "video" && !f.metadata,
+  );
+
   const canProceed = [
-    files.length > 0,
+    files.length > 0 && !videosStillLoading,
     prompt.trim().length > 0,
     true, // step 2 always can proceed
     command.trim().length > 0,
