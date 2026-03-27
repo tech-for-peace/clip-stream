@@ -82,6 +82,13 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+interface ExportQuality {
+  label: string;
+  width: number;
+  height: number;
+  description: string;
+}
+
 export default function Advanced() {
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -89,6 +96,7 @@ export default function Advanced() {
   const [command, setCommand] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [showLogs, setShowLogs] = useState(true);
+  const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const processor = useFFmpegRawProcessor();
