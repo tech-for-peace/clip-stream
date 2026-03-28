@@ -49,7 +49,6 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     outputUrl,
     logs,
     isCancelling,
-    load,
     process,
     cancel,
     reset,
