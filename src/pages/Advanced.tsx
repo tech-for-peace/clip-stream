@@ -297,8 +297,12 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (!command.trim()) return;
+    // Lazy-load FFmpeg if not yet loaded
+    if (!processor.isReady) {
+      await processor.load();
+    }
     const mapped = files.map((f) => ({ name: f.mappedName, file: f.file }));
     processor.execute(command, mapped);
   };
