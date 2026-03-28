@@ -116,8 +116,14 @@ export function useFFmpegProcessor() {
     isCancelling: false,
   });
 
-  // Terminate FFmpeg on unmount or page hide to free WASM memory
+  // Clean up any stale FFmpeg caches from previous sessions (e.g. after a crash)
   useEffect(() => {
+    // Clear any IndexedDB databases that ffmpeg.wasm may have created
+    try {
+      indexedDB.deleteDatabase("ffmpeg-core");
+      indexedDB.deleteDatabase("ffmpeg-cache");
+    } catch { /* ignore */ }
+
     const dispose = () => {
       try { ffmpegRef.current?.terminate(); } catch { /* ignore */ }
       ffmpegRef.current = null;
