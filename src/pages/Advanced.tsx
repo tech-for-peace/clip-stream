@@ -106,7 +106,9 @@ export default function Advanced() {
 
   const processor = useFFmpegRawProcessor();
 
-  // FFmpeg is loaded lazily when the user clicks "Process" (step 4)
+  useEffect(() => {
+    processor.load();
+  }, [processor]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -297,12 +299,8 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
     setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
-  const handleRun = async () => {
+  const handleRun = () => {
     if (!command.trim()) return;
-    // Lazy-load FFmpeg if not yet loaded
-    if (!processor.isReady) {
-      await processor.load();
-    }
     const mapped = files.map((f) => ({ name: f.mappedName, file: f.file }));
     processor.execute(command, mapped);
   };
@@ -796,7 +794,7 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={processor.isLoading || !command.trim()}
+                disabled={!processor.isReady || !command.trim()}
                 size="sm"
                 className="w-full"
               >
