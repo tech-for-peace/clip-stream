@@ -235,6 +235,12 @@ export function useFFmpegRawProcessor() {
             setState((s) => ({ ...s, elapsedSeconds: elapsed }));
           }, 1000);
 
+          const { args, outputFile } = parseCommand(command);
+
+          // Fail fast on malformed/unsafe commands before loading large files into FFmpeg FS.
+          const validationError = validateArgs(args);
+          if (validationError) throw new Error(validationError);
+
           // Write input files — null each buffer immediately after write
           for (const { name, file } of files) {
             addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -242,12 +248,6 @@ export function useFFmpegRawProcessor() {
             await ffmpeg.writeFile(name, data);
             data = null; // Release buffer reference
           }
-
-          const { args, outputFile } = parseCommand(command);
-
-          // Validate for dangerous patterns
-          const validationError = validateArgs(args);
-          if (validationError) throw new Error(validationError);
 
           addLog("info", `Command: ffmpeg ${args.join(" ")}`);
           addLog("info", "Starting FFmpeg processing...");
