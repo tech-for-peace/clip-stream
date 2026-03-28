@@ -425,6 +425,7 @@ export function useFFmpegProcessor() {
           addLog("info", `Loading audio file: ${config.audioFile.name}`);
           const audioData = await fetchFile(config.audioFile);
           await ffmpeg.writeFile("input_audio", audioData);
+          writtenFiles.push("input_audio");
           addLog("info", "Audio file loaded into memory");
 
           // Check if cancelled after loading audio
