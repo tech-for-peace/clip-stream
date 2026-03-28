@@ -201,7 +201,7 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
       {!isLoading && !isProcessing && !outputUrl && (
         <Button
           onClick={() => process(config)}
-          disabled={!isReady || !canProcess}
+          disabled={!canProcess}
           size="sm"
           className="w-full"
         >
