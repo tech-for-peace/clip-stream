@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import type { ClipConfig } from "@/types/clip";
@@ -115,6 +115,19 @@ export function useFFmpegProcessor() {
     logs: [],
     isCancelling: false,
   });
+
+  // Terminate FFmpeg on unmount or page hide to free WASM memory
+  useEffect(() => {
+    const dispose = () => {
+      try { ffmpegRef.current?.terminate(); } catch { /* ignore */ }
+      ffmpegRef.current = null;
+    };
+    addEventListener("pagehide", dispose);
+    return () => {
+      removeEventListener("pagehide", dispose);
+      dispose();
+    };
+  }, []);
 
   const addLog = useCallback((type: LogEntry["type"], message: string) => {
     const entry: LogEntry = { timestamp: new Date(), type, message };
@@ -291,9 +304,14 @@ export function useFFmpegProcessor() {
         return;
       }
 
+      // Lazy-load FFmpeg if not yet loaded
+      if (!ffmpegRef.current?.loaded) {
+        await load();
+      }
+
       const ffmpeg = ffmpegRef.current;
       if (!ffmpeg?.loaded) {
-        setState((s) => ({ ...s, error: "FFmpeg not loaded" }));
+        setState((s) => ({ ...s, error: "FFmpeg failed to load" }));
         return;
       }
 
@@ -749,7 +767,7 @@ export function useFFmpegProcessor() {
         timeoutCancelledRef.current = false;
       }
     },
-    [addLog, clearLogs],
+    [addLog, clearLogs, load],
   );
 
   const reset = useCallback(() => {
