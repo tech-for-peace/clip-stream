@@ -116,6 +116,19 @@ export function useFFmpegProcessor() {
     isCancelling: false,
   });
 
+  // Terminate FFmpeg on unmount or page hide to free WASM memory
+  useEffect(() => {
+    const dispose = () => {
+      try { ffmpegRef.current?.terminate(); } catch { /* ignore */ }
+      ffmpegRef.current = null;
+    };
+    addEventListener("pagehide", dispose);
+    return () => {
+      removeEventListener("pagehide", dispose);
+      dispose();
+    };
+  }, []);
+
   const addLog = useCallback((type: LogEntry["type"], message: string) => {
     const entry: LogEntry = { timestamp: new Date(), type, message };
     setState((s) => ({ ...s, logs: [...s.logs.slice(-99), entry] }));
