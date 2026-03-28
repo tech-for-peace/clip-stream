@@ -29,29 +29,15 @@ const RESOURCE_HASHES: Record<string, string> = {
 
 // ── Module-level state ──
 let activeFFmpeg: FFmpeg | null = null;
-let activeJobLock: symbol | null = null;
+let jobQueue: Promise<void> = Promise.resolve();
+let releaseActiveQueueSlot: (() => void) | null = null;
 const trackedUrls = new Set<string>();
 
-function acquireJobLock(): symbol {
-  // Self-heal stale lock state (e.g. abandoned run where instance is already gone).
-  if (activeJobLock && !activeFFmpeg) {
-    activeJobLock = null;
-  }
-
-  if (activeJobLock) {
-    throw new Error(
-      "Another FFmpeg job is already running. Reset/cancel that run before starting a new one.",
-    );
-  }
-
-  const lock = Symbol("ffmpeg-job");
-  activeJobLock = lock;
-  return lock;
-}
-
-function releaseJobLock(lock: symbol): void {
-  if (activeJobLock === lock) {
-    activeJobLock = null;
+function releaseQueueSlot(): void {
+  if (releaseActiveQueueSlot) {
+    const release = releaseActiveQueueSlot;
+    releaseActiveQueueSlot = null;
+    release();
   }
 }
 
@@ -254,8 +240,9 @@ export function terminateFFmpeg(): void {
 export function disposeAll(): void {
   terminateFFmpeg();
   revokeAllUrls();
-  // Recover from stale lock state after navigation/unmount.
-  activeJobLock = null;
+  // Recover from stale queue state after navigation/unmount/cancel.
+  releaseQueueSlot();
+  jobQueue = Promise.resolve();
 }
 
 /** Safely unlink a file from FFmpeg FS, ignoring errors */
@@ -286,7 +273,16 @@ export async function runFFmpegJob<T>(
   callback: (ffmpeg: FFmpeg, isMultiThreaded: boolean) => Promise<T>,
   loadCb?: LoadProgressCallback,
 ): Promise<T> {
-  const lock = acquireJobLock();
+  // Queue through a release-gated slot so failures cannot poison future jobs.
+  const prev = jobQueue.catch(() => {});
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  jobQueue = prev.then(() => gate, () => gate);
+
+  await prev;
+  releaseActiveQueueSlot = release;
   let ffmpeg: FFmpeg | null = null;
 
   try {
@@ -306,7 +302,12 @@ export async function runFFmpegJob<T>(
       activeFFmpeg = null;
     }
 
-    releaseJobLock(lock);
+    // Always release this queue slot exactly once.
+    if (releaseActiveQueueSlot === release) {
+      releaseQueueSlot();
+    } else {
+      release();
+    }
   }
 }
 
