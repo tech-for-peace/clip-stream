@@ -107,10 +107,6 @@ export default function Advanced() {
   const processor = useFFmpegRawProcessor();
 
   useEffect(() => {
-    processor.load();
-  }, [processor]);
-
-  useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processor.logs]);
 
@@ -794,7 +790,7 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={!processor.isReady || !command.trim()}
+                disabled={processor.isLoading || !command.trim()}
                 size="sm"
                 className="w-full"
               >
