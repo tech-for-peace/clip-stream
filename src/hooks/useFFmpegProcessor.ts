@@ -703,7 +703,6 @@ export function useFFmpegProcessor() {
             }`,
           );
 
-          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
@@ -712,17 +711,6 @@ export function useFFmpegProcessor() {
             outputUrl: url,
           }));
         }
-
-        // Cleanup
-        await ffmpeg.deleteFile("input.mp4");
-        if (config.audioFile) {
-          await ffmpeg.deleteFile("input_audio");
-        }
-        try {
-          await ffmpeg.deleteFile("output.mp4");
-        } catch {
-          // Already deleted or doesn't exist
-        }
       } catch (err) {
         const errorMsg =
           err instanceof Error ? err.message : "Processing failed";
@@ -730,7 +718,6 @@ export function useFFmpegProcessor() {
         // Check if this was a cancellation
         if (signal.aborted || errorMsg === "Processing cancelled") {
           addLog("warn", "Processing cancelled by user");
-          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           setState((s) => ({
             ...s,
             isProcessing: false,
@@ -739,7 +726,6 @@ export function useFFmpegProcessor() {
             error: "Processing cancelled",
           }));
         } else {
-          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
           addLog("error", errorMsg);
           setState((s) => ({
             ...s,
@@ -751,6 +737,25 @@ export function useFFmpegProcessor() {
 
         // Reset timeout flag
         timeoutCancelledRef.current = false;
+      } finally {
+        // Always clean up timer
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+
+        // Always clean up virtual FS files
+        if (ffmpeg?.loaded) {
+          for (const name of writtenFiles) {
+            try { await ffmpeg.deleteFile(name); } catch { /* ok */ }
+          }
+          try { await ffmpeg.deleteFile("output.mp4"); } catch { /* ok */ }
+        }
+
+        // Terminate FFmpeg instance to free WASM memory
+        try {
+          ffmpeg.terminate();
+        } catch { /* ok */ }
+        ffmpegRef.current = null;
+
+        setState((s) => ({ ...s, loadPhase: "idle" }));
       }
     },
     [addLog, clearLogs],
