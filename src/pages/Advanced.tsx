@@ -790,7 +790,7 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={!processor.isReady || !command.trim()}
+                disabled={processor.isLoading || !command.trim()}
                 size="sm"
                 className="w-full"
               >
