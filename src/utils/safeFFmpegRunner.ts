@@ -29,7 +29,7 @@ const RESOURCE_HASHES: Record<string, string> = {
 
 // ── Module-level state ──
 let activeFFmpeg: FFmpeg | null = null;
-let jobMutex = false;
+let jobQueue: Promise<unknown> = Promise.resolve();
 const trackedUrls = new Set<string>();
 
 // ── Blob URL tracking ──
@@ -251,11 +251,14 @@ export async function runFFmpegJob<T>(
   callback: (ffmpeg: FFmpeg, isMultiThreaded: boolean) => Promise<T>,
   loadCb?: LoadProgressCallback,
 ): Promise<T> {
-  if (jobMutex) {
-    throw new Error("Another FFmpeg job is already running. Please wait.");
-  }
+  // Promise-chain mutex: waits for any previous job to finish (even abandoned ones)
+  let release!: () => void;
+  const prev = jobQueue;
+  jobQueue = new Promise<void>((r) => (release = r));
 
-  jobMutex = true;
+  // Wait for the previous job to complete (swallow its errors)
+  await prev.catch(() => {});
+
   let ffmpeg: FFmpeg | null = null;
 
   try {
@@ -272,13 +275,9 @@ export async function runFFmpegJob<T>(
     if (activeFFmpeg === ffmpeg) {
       activeFFmpeg = null;
     }
-    jobMutex = false;
+    // Release the mutex so the next job can proceed
+    release();
   }
-}
-
-/** Check if a job is currently running */
-export function isJobRunning(): boolean {
-  return jobMutex;
 }
 
 // ── Page lifecycle: terminate on tab close/navigation ──
