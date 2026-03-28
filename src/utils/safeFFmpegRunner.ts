@@ -29,7 +29,7 @@ const RESOURCE_HASHES: Record<string, string> = {
 
 // ── Module-level state ──
 let activeFFmpeg: FFmpeg | null = null;
-let jobMutex = false;
+let jobQueue: Promise<unknown> = Promise.resolve();
 const trackedUrls = new Set<string>();
 
 // ── Blob URL tracking ──
