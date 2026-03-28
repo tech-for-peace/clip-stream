@@ -75,7 +75,39 @@ function parseCommand(command: string): { args: string[]; outputFile: string } {
   return { args, outputFile };
 }
 
-/** Validate parsed FFmpeg args to block dangerous patterns */
+/** Find labels produced/consumed in filter_complex and detect dangling outputs. */
+function findDanglingFilterLabels(args: string[]): string[] {
+  const filterIndex = args.findIndex((arg) => arg === "-filter_complex");
+  if (filterIndex === -1 || filterIndex + 1 >= args.length) return [];
+
+  const filterGraph = args[filterIndex + 1];
+  const labelMatches = [...filterGraph.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]);
+  if (labelMatches.length === 0) return [];
+
+  const counts = new Map<string, number>();
+  for (const label of labelMatches) {
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+
+  const mappedLabels = new Set<string>();
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] !== "-map" || i + 1 >= args.length) continue;
+    const match = args[i + 1].match(/^\[([^\]]+)\]$/);
+    if (match) mappedLabels.add(match[1]);
+  }
+
+  return [...counts.entries()]
+    .filter(([label, count]) => {
+      if (count > 1) return false;
+      if (mappedLabels.has(label)) return false;
+      // Source stream references like [0:v], [1:a:0] are expected to appear once.
+      if (/^\d+:[a-z](?::\d+)?$/i.test(label)) return false;
+      return true;
+    })
+    .map(([label]) => label);
+}
+
+/** Validate parsed FFmpeg args to block dangerous patterns + malformed filter graphs */
 function validateArgs(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i].toLowerCase();
@@ -96,6 +128,14 @@ function validateArgs(args: string[]): string | null {
       }
     }
   }
+
+  const danglingLabels = findDanglingFilterLabels(args);
+  if (danglingLabels.length > 0) {
+    return `Invalid filter graph: unconnected output label(s): ${danglingLabels
+      .map((l) => `[${l}]`)
+      .join(", ")}. Remove unused branches (e.g. extra anullsrc/aresample outputs) or connect them to concat/map.`;
+  }
+
   return null;
 }
 
