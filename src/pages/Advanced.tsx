@@ -107,10 +107,6 @@ export default function Advanced() {
   const processor = useFFmpegRawProcessor();
 
   useEffect(() => {
-    processor.load();
-  }, [processor]);
-
-  useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processor.logs]);
 

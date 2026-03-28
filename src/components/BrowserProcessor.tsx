@@ -66,11 +66,6 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Eagerly load FFmpeg when component mounts
-  useEffect(() => {
-    load();
-  }, [load]);
-
   // Auto-scroll logs to bottom
   useEffect(() => {
     if (logContainerRef.current) {
