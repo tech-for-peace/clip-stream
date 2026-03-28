@@ -304,9 +304,14 @@ export function useFFmpegProcessor() {
         return;
       }
 
+      // Lazy-load FFmpeg if not yet loaded
+      if (!ffmpegRef.current?.loaded) {
+        await load();
+      }
+
       const ffmpeg = ffmpegRef.current;
       if (!ffmpeg?.loaded) {
-        setState((s) => ({ ...s, error: "FFmpeg not loaded" }));
+        setState((s) => ({ ...s, error: "FFmpeg failed to load" }));
         return;
       }
 
