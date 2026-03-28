@@ -32,43 +32,6 @@ let activeFFmpeg: FFmpeg | null = null;
 let jobQueue: Promise<unknown> = Promise.resolve();
 const trackedUrls = new Set<string>();
 
-const DEFAULT_LOAD_TIMEOUT_MS = 2 * 60 * 1000;
-const DEFAULT_EXEC_TIMEOUT_MS = 45 * 60 * 1000;
-const DEFAULT_QUEUE_WAIT_TIMEOUT_MS = 15 * 1000;
-
-interface JobTimeoutOptions {
-  loadTimeoutMs?: number;
-  execTimeoutMs?: number;
-  queueWaitTimeoutMs?: number;
-}
-
-function timeoutError(message: string): Error {
-  return new Error(message);
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  message: string,
-  onTimeout?: () => void,
-): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          try { onTimeout?.(); } catch { /* ignore */ }
-          reject(timeoutError(message));
-        }, ms);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
-
 function forceTerminateInstance(ffmpeg: FFmpeg | null): void {
   if (!ffmpeg) return;
 
@@ -297,53 +260,22 @@ export async function safeUnlink(ffmpeg: FFmpeg, filename: string): Promise<void
 export async function runFFmpegJob<T>(
   callback: (ffmpeg: FFmpeg, isMultiThreaded: boolean) => Promise<T>,
   loadCb?: LoadProgressCallback,
-  options?: JobTimeoutOptions,
 ): Promise<T> {
-  const loadTimeoutMs = options?.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS;
-  const execTimeoutMs = options?.execTimeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
-  const queueWaitTimeoutMs = options?.queueWaitTimeoutMs ?? DEFAULT_QUEUE_WAIT_TIMEOUT_MS;
-
   // Promise-chain mutex: waits for any previous job to finish (even abandoned ones)
   let release!: () => void;
   const prev = jobQueue;
   jobQueue = new Promise<void>((r) => (release = r));
 
   // Wait for the previous job to complete (swallow its errors)
-  try {
-    await withTimeout(
-      prev.catch(() => {}),
-      queueWaitTimeoutMs,
-      "Previous FFmpeg job did not release in time. Recovering lock...",
-      () => {
-        // Recover from stale/hung previous jobs.
-        terminateFFmpeg();
-      },
-    );
-  } catch {
-    // Continue with a fresh job after forced termination above.
-  }
+  await prev.catch(() => {});
 
   let ffmpeg: FFmpeg | null = null;
 
   try {
-    const result = await withTimeout(
-      loadFreshFFmpeg(loadCb),
-      loadTimeoutMs,
-      `FFmpeg load timed out after ${Math.round(loadTimeoutMs / 1000)}s`,
-      () => {
-        terminateFFmpeg();
-      },
-    );
+    const result = await loadFreshFFmpeg(loadCb);
     ffmpeg = result.ffmpeg;
 
-    return await withTimeout(
-      callback(ffmpeg, result.isMultiThreaded),
-      execTimeoutMs,
-      `FFmpeg processing timed out after ${Math.round(execTimeoutMs / 1000)}s`,
-      () => {
-        forceTerminateInstance(ffmpeg);
-      },
-    );
+    return await callback(ffmpeg, result.isMultiThreaded);
   } finally {
     // Always terminate the instance to free the WASM heap
     forceTerminateInstance(ffmpeg);
