@@ -75,7 +75,39 @@ function parseCommand(command: string): { args: string[]; outputFile: string } {
   return { args, outputFile };
 }
 
-/** Validate parsed FFmpeg args to block dangerous patterns */
+/** Find labels produced/consumed in filter_complex and detect dangling outputs. */
+function findDanglingFilterLabels(args: string[]): string[] {
+  const filterIndex = args.findIndex((arg) => arg === "-filter_complex");
+  if (filterIndex === -1 || filterIndex + 1 >= args.length) return [];
+
+  const filterGraph = args[filterIndex + 1];
+  const labelMatches = [...filterGraph.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]);
+  if (labelMatches.length === 0) return [];
+
+  const counts = new Map<string, number>();
+  for (const label of labelMatches) {
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+
+  const mappedLabels = new Set<string>();
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] !== "-map" || i + 1 >= args.length) continue;
+    const match = args[i + 1].match(/^\[([^\]]+)\]$/);
+    if (match) mappedLabels.add(match[1]);
+  }
+
+  return [...counts.entries()]
+    .filter(([label, count]) => {
+      if (count > 1) return false;
+      if (mappedLabels.has(label)) return false;
+      // Source stream references like [0:v], [1:a:0] are expected to appear once.
+      if (/^\d+:[a-z](?::\d+)?$/i.test(label)) return false;
+      return true;
+    })
+    .map(([label]) => label);
+}
+
+/** Validate parsed FFmpeg args to block dangerous patterns + malformed filter graphs */
 function validateArgs(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i].toLowerCase();
@@ -96,6 +128,14 @@ function validateArgs(args: string[]): string | null {
       }
     }
   }
+
+  const danglingLabels = findDanglingFilterLabels(args);
+  if (danglingLabels.length > 0) {
+    return `Invalid filter graph: unconnected output label(s): ${danglingLabels
+      .map((l) => `[${l}]`)
+      .join(", ")}. Remove unused branches (e.g. extra anullsrc/aresample outputs) or connect them to concat/map.`;
+  }
+
   return null;
 }
 
@@ -195,6 +235,12 @@ export function useFFmpegRawProcessor() {
             setState((s) => ({ ...s, elapsedSeconds: elapsed }));
           }, 1000);
 
+          const { args, outputFile } = parseCommand(command);
+
+          // Fail fast on malformed/unsafe commands before loading large files into FFmpeg FS.
+          const validationError = validateArgs(args);
+          if (validationError) throw new Error(validationError);
+
           // Write input files — null each buffer immediately after write
           for (const { name, file } of files) {
             addLog("info", `Loading file: ${name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -202,12 +248,6 @@ export function useFFmpegRawProcessor() {
             await ffmpeg.writeFile(name, data);
             data = null; // Release buffer reference
           }
-
-          const { args, outputFile } = parseCommand(command);
-
-          // Validate for dangerous patterns
-          const validationError = validateArgs(args);
-          if (validationError) throw new Error(validationError);
 
           addLog("info", `Command: ffmpeg ${args.join(" ")}`);
           addLog("info", "Starting FFmpeg processing...");
