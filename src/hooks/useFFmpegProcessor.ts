@@ -767,7 +767,7 @@ export function useFFmpegProcessor() {
         timeoutCancelledRef.current = false;
       }
     },
-    [addLog, clearLogs],
+    [addLog, clearLogs, load],
   );
 
   const reset = useCallback(() => {
