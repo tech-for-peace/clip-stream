@@ -107,6 +107,10 @@ export default function Advanced() {
   const processor = useFFmpegRawProcessor();
 
   useEffect(() => {
+    processor.load();
+  }, [processor]);
+
+  useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [processor.logs]);
 
@@ -250,7 +254,6 @@ ${prompt}${resolutionNote}
 11. When using scale filter, ALWAYS add "setsar=1" after it (e.g., scale=W:H,setsar=1) to force square pixels — this is critical when concatenating multiple streams to avoid SAR mismatch errors
 12. When concatenating streams with "concat" filter, ALL segments MUST have identical video parameters (resolution, SAR, fps, pixel format). Always normalize with: scale=W:H,fps=N,format=yuv420p,setsar=1
 13. If an input may lack audio, generate a silent audio track using: -f lavfi -t <duration> -i anullsrc=channel_layout=stereo:sample_rate=44100
-14. CRITICAL: Every filter output label (e.g. [a2]) MUST be consumed by a downstream filter. Do NOT create anullsrc inputs or filter outputs that are never used. Only add anullsrc if the silent track is actually fed into concat. If all inputs already have audio, do NOT add anullsrc at all.
 
 Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" directly.`;
   }, [files, prompt, selectedQuality, resolutionsMismatch]);
@@ -791,7 +794,7 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={processor.isLoading || !command.trim()}
+                disabled={!processor.isReady || !command.trim()}
                 size="sm"
                 className="w-full"
               >

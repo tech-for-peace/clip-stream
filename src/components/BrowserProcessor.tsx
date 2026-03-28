@@ -49,6 +49,7 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
     outputUrl,
     logs,
     isCancelling,
+    load,
     process,
     cancel,
     reset,
@@ -65,6 +66,10 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
 
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -198,7 +203,7 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
       {!isLoading && !isProcessing && !outputUrl && (
         <Button
           onClick={() => process(config)}
-          disabled={!canProcess}
+          disabled={!isReady || !canProcess}
           size="sm"
           className="w-full"
         >
