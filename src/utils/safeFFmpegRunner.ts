@@ -231,6 +231,8 @@ export function terminateFFmpeg(): void {
 export function disposeAll(): void {
   terminateFFmpeg();
   revokeAllUrls();
+  // Recover from stale queue state after navigation/unmount.
+  jobQueue = Promise.resolve();
 }
 
 /** Safely unlink a file from FFmpeg FS, ignoring errors */
@@ -261,31 +263,34 @@ export async function runFFmpegJob<T>(
   callback: (ffmpeg: FFmpeg, isMultiThreaded: boolean) => Promise<T>,
   loadCb?: LoadProgressCallback,
 ): Promise<T> {
-  // Promise-chain mutex: waits for any previous job to finish (even abandoned ones)
-  let release!: () => void;
-  const prev = jobQueue;
-  jobQueue = new Promise<void>((r) => (release = r));
+  const run = jobQueue
+    .catch(() => {})
+    .then(async () => {
+      let ffmpeg: FFmpeg | null = null;
 
-  // Wait for the previous job to complete (swallow its errors)
-  await prev.catch(() => {});
+      try {
+        const result = await loadFreshFFmpeg(loadCb);
+        ffmpeg = result.ffmpeg;
+        return await callback(ffmpeg, result.isMultiThreaded);
+      } finally {
+        // Always terminate the instance to free the WASM heap.
+        // Cleanup runs only after the real callback settles.
+        forceTerminateInstance(ffmpeg);
 
-  let ffmpeg: FFmpeg | null = null;
+        // If load failed before assigning ffmpeg, clear any active global instance.
+        if (!ffmpeg) {
+          terminateFFmpeg();
+        }
 
-  try {
-    const result = await loadFreshFFmpeg(loadCb);
-    ffmpeg = result.ffmpeg;
+        if (activeFFmpeg === ffmpeg) {
+          activeFFmpeg = null;
+        }
+      }
+    });
 
-    return await callback(ffmpeg, result.isMultiThreaded);
-  } finally {
-    // Always terminate the instance to free the WASM heap
-    forceTerminateInstance(ffmpeg);
-    // Clear the module-level reference
-    if (activeFFmpeg === ffmpeg) {
-      activeFFmpeg = null;
-    }
-    // Release the mutex so the next job can proceed
-    release();
-  }
+  // Keep queue healthy even if this run fails.
+  jobQueue = run.then(() => undefined, () => undefined);
+  return run;
 }
 
 // ── Page lifecycle: terminate on tab close/navigation ──
