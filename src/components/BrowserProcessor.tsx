@@ -67,9 +67,7 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // FFmpeg is now lazy-loaded when processing starts - no eager load needed
 
   // Auto-scroll logs to bottom
   useEffect(() => {
