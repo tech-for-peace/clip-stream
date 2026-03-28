@@ -29,8 +29,31 @@ const RESOURCE_HASHES: Record<string, string> = {
 
 // ── Module-level state ──
 let activeFFmpeg: FFmpeg | null = null;
-let jobQueue: Promise<unknown> = Promise.resolve();
+let activeJobLock: symbol | null = null;
 const trackedUrls = new Set<string>();
+
+function acquireJobLock(): symbol {
+  // Self-heal stale lock state (e.g. abandoned run where instance is already gone).
+  if (activeJobLock && !activeFFmpeg) {
+    activeJobLock = null;
+  }
+
+  if (activeJobLock) {
+    throw new Error(
+      "Another FFmpeg job is already running. Reset/cancel that run before starting a new one.",
+    );
+  }
+
+  const lock = Symbol("ffmpeg-job");
+  activeJobLock = lock;
+  return lock;
+}
+
+function releaseJobLock(lock: symbol): void {
+  if (activeJobLock === lock) {
+    activeJobLock = null;
+  }
+}
 
 function forceTerminateInstance(ffmpeg: FFmpeg | null): void {
   if (!ffmpeg) return;
@@ -231,8 +254,8 @@ export function terminateFFmpeg(): void {
 export function disposeAll(): void {
   terminateFFmpeg();
   revokeAllUrls();
-  // Recover from stale queue state after navigation/unmount.
-  jobQueue = Promise.resolve();
+  // Recover from stale lock state after navigation/unmount.
+  activeJobLock = null;
 }
 
 /** Safely unlink a file from FFmpeg FS, ignoring errors */
@@ -263,34 +286,28 @@ export async function runFFmpegJob<T>(
   callback: (ffmpeg: FFmpeg, isMultiThreaded: boolean) => Promise<T>,
   loadCb?: LoadProgressCallback,
 ): Promise<T> {
-  const run = jobQueue
-    .catch(() => {})
-    .then(async () => {
-      let ffmpeg: FFmpeg | null = null;
+  const lock = acquireJobLock();
+  let ffmpeg: FFmpeg | null = null;
 
-      try {
-        const result = await loadFreshFFmpeg(loadCb);
-        ffmpeg = result.ffmpeg;
-        return await callback(ffmpeg, result.isMultiThreaded);
-      } finally {
-        // Always terminate the instance to free the WASM heap.
-        // Cleanup runs only after the real callback settles.
-        forceTerminateInstance(ffmpeg);
+  try {
+    const result = await loadFreshFFmpeg(loadCb);
+    ffmpeg = result.ffmpeg;
+    return await callback(ffmpeg, result.isMultiThreaded);
+  } finally {
+    // Always terminate the instance to free the WASM heap.
+    forceTerminateInstance(ffmpeg);
 
-        // If load failed before assigning ffmpeg, clear any active global instance.
-        if (!ffmpeg) {
-          terminateFFmpeg();
-        }
+    // If load failed before assigning ffmpeg, clear any active global instance.
+    if (!ffmpeg) {
+      terminateFFmpeg();
+    }
 
-        if (activeFFmpeg === ffmpeg) {
-          activeFFmpeg = null;
-        }
-      }
-    });
+    if (activeFFmpeg === ffmpeg) {
+      activeFFmpeg = null;
+    }
 
-  // Keep queue healthy even if this run fails.
-  jobQueue = run.then(() => undefined, () => undefined);
-  return run;
+    releaseJobLock(lock);
+  }
 }
 
 // ── Page lifecycle: terminate on tab close/navigation ──
