@@ -339,6 +339,9 @@ export function useFFmpegRawProcessor() {
         setState((s) => ({ ...s, elapsedSeconds: elapsed }));
       }, 1000);
 
+      let outputFile = "output.mp4";
+      const writtenFiles: string[] = [];
+
       try {
         for (const { name, file } of files) {
           addLog(
@@ -347,18 +350,20 @@ export function useFFmpegRawProcessor() {
           );
           const data = await fetchFile(file);
           await ffmpeg.writeFile(name, data);
+          writtenFiles.push(name);
         }
 
-        const { args, outputFile } = parseCommand(command);
+        const parsed = parseCommand(command);
+        outputFile = parsed.outputFile;
 
         // Validate args for dangerous patterns
-        const validationError = validateArgs(args);
+        const validationError = validateArgs(parsed.args);
         if (validationError) {
           throw new Error(validationError);
         }
 
         // Replace original filenames with mapped names in args
-        const mappedArgs = args.map((arg) => {
+        const mappedArgs = parsed.args.map((arg) => {
           if (arg === outputFile) return outputFile;
           return arg;
         });
@@ -413,7 +418,6 @@ export function useFFmpegRawProcessor() {
           `Done! Output: ${(data.length / 1024 / 1024).toFixed(2)} MB`,
         );
 
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({
           ...s,
           isProcessing: false,
@@ -422,25 +426,29 @@ export function useFFmpegRawProcessor() {
           outputUrl: url,
           outputType: isAudio ? "audio" : "video",
         }));
-
-        // Cleanup
-        for (const { name } of files) {
-          try {
-            await ffmpeg.deleteFile(name);
-          } catch {
-            /* ok */
-          }
-        }
-        try {
-          await ffmpeg.deleteFile(outputFile);
-        } catch {
-          /* ok */
-        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Processing failed";
         addLog("error", msg);
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setState((s) => ({ ...s, isProcessing: false, error: msg }));
+      } finally {
+        // Always clean up timer
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+
+        // Always clean up virtual FS files
+        if (ffmpeg?.loaded) {
+          for (const name of writtenFiles) {
+            try { await ffmpeg.deleteFile(name); } catch { /* ok */ }
+          }
+          try { await ffmpeg.deleteFile(outputFile); } catch { /* ok */ }
+        }
+
+        // Terminate FFmpeg instance to free WASM memory
+        try {
+          ffmpeg.terminate();
+        } catch { /* ok */ }
+        ffmpegRef.current = null;
+
+        setState((s) => ({ ...s, loadPhase: "idle" }));
       }
     },
     [addLog, clearLogs],

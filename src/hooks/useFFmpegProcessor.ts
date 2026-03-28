@@ -322,6 +322,8 @@ export function useFFmpegProcessor() {
         setState((s) => ({ ...s, elapsedSeconds: elapsed }));
       }, 1000);
 
+      const writtenFiles: string[] = [];
+
       try {
         // Check if cancelled before starting
         if (signal.aborted) {
@@ -331,6 +333,7 @@ export function useFFmpegProcessor() {
         addLog("info", `Loading video file: ${config.videoFile.name}`);
         const videoData = await fetchFile(config.videoFile);
         await ffmpeg.writeFile("input.mp4", videoData);
+        writtenFiles.push("input.mp4");
         addLog("info", "Video file loaded into memory");
 
         // Check if cancelled after loading video
