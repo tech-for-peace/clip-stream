@@ -95,7 +95,7 @@ export default function Advanced() {
 
   useEffect(() => {
     processor.load();
-  }, [processor.load]);
+  }, [processor]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
