@@ -537,13 +537,20 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={!processor.isReady || !command.trim()}
+                disabled={!command.trim()}
                 size="sm"
                 className="w-full"
               >
                 <Play className="h-4 w-4 mr-1" />
-                Run FFmpeg Command
+                {processor.isReady ? "Run FFmpeg Command" : "Initialize & Run"}
               </Button>
+            )}
+
+            {/* Info when not loaded */}
+            {!processor.isReady && !processor.isLoading && !processor.isProcessing && (
+              <p className="text-xs text-muted-foreground">
+                FFmpeg will be downloaded (~32MB) when you click Run. Processes entirely in your browser.
+              </p>
             )}
 
             {/* Logs */}
