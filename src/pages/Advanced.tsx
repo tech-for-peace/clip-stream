@@ -606,13 +606,16 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
         </div>
 
         {/* Footer */}
-        <footer className="border-t border-border/50 pt-4">
+        <footer className="border-t border-border/50 pt-4 space-y-2">
           <p className="text-xs text-muted-foreground text-center">
             Made with ❤️ by{" "}
             <a href="https://techforpeace.co.in" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
               techforpeace.co.in
             </a>
           </p>
+          <div className="text-center">
+            <ResetBanner />
+          </div>
         </footer>
       </main>
     </div>
