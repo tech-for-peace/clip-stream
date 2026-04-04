@@ -56,9 +56,8 @@ export function BrowserProcessor({ config }: BrowserProcessorProps) {
   const [showLogs, setShowLogs] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // FFmpeg is loaded lazily when the user clicks "Process Video"
+  // No eager loading on mount to avoid unnecessary memory consumption
 
   // Auto-scroll logs to bottom
   useEffect(() => {
