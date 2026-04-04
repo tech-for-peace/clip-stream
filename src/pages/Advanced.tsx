@@ -93,9 +93,7 @@ export default function Advanced() {
 
   const processor = useFFmpegRawProcessor();
 
-  useEffect(() => {
-    processor.load();
-  }, [processor]);
+  // FFmpeg is loaded lazily when the user clicks Run — no eager loading
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
