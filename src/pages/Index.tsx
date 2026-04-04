@@ -5,6 +5,7 @@ import { GlobalFadeSettings } from "@/components/GlobalFadeSettings";
 import { CommandOutput } from "@/components/CommandOutput";
 import { BrowserProcessor } from "@/components/BrowserProcessor";
 import { InstallGuide } from "@/components/InstallGuide";
+import { ResetBanner } from "@/components/ResetBanner";
 
 import type { ClipConfig } from "@/types/clip";
 import { generateFFmpegCommand } from "@/utils/ffmpegGenerator";
