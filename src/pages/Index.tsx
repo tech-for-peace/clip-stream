@@ -150,6 +150,9 @@ const Index = () => {
               techforpeace.co.in
             </a>
           </p>
+          <div className="text-center">
+            <ResetBanner />
+          </div>
         </div>
       </footer>
     </div>
