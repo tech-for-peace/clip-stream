@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFFmpegRawProcessor, type LogEntry } from "@/hooks/useFFmpegRawProcessor";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { ResetBanner } from "@/components/ResetBanner";
 
 interface FileMetadata {
   duration?: number;
