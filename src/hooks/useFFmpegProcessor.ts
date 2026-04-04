@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import type { ClipConfig } from "@/types/clip";
@@ -24,14 +24,11 @@ interface ProcessingState {
 }
 
 // SHA-384 hashes for FFmpeg resources (version 0.12.10)
-// These ensure CDN resources haven't been tampered with
 const RESOURCE_HASHES: Record<string, string> = {
-  // Single-threaded core
   "core/ffmpeg-core.js":
     "sha384-9KlAmgHu5wDqdgQvFhQGZOtKdCwGcMppDhM/kBkUpZ5LS7KGuAHbE+NgtJQEf84i",
   "core/ffmpeg-core.wasm":
     "sha384-U1VDhkPYrM3wTCT4/vjSpSsKqG/UjljYrYCI4hBSJ02svbCkxuCi6U6u/peg5vpW",
-  // Multi-threaded core
   "core-mt/ffmpeg-core.js":
     "sha384-CqK+fB7O3Dl0SbCkpBiLNrSGeKVUCxa/mwPUPzOGLIQwVNBZEO3OOBhsTz6WqRw3",
   "core-mt/ffmpeg-core.wasm":
@@ -49,24 +46,17 @@ async function verifyAndFetchResource(
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.status}`);
   }
-
   const buffer = await response.arrayBuffer();
-
-  // Calculate SHA-384 hash of the downloaded content
   const hashBuffer = await crypto.subtle.digest("SHA-384", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashBase64 = btoa(String.fromCharCode(...hashArray));
   const calculatedHash = `sha384-${hashBase64}`;
-
   const expectedHash = RESOURCE_HASHES[resourceKey];
   if (expectedHash && calculatedHash !== expectedHash) {
     throw new Error(
-      `Security error: integrity check failed for ${resourceKey}. ` +
-        `Expected: ${expectedHash}, Got: ${calculatedHash}. ` +
-        "The CDN resource may have been tampered with. Aborting load.",
+      `Security error: integrity check failed for ${resourceKey}. Aborting load.`,
     );
   }
-
   const blob = new Blob([buffer], { type: mimeType });
   return URL.createObjectURL(blob);
 }
@@ -77,15 +67,12 @@ function supportsMultiThreading(): boolean {
     const isCrossOriginIsolated = !!(
       globalThis as { crossOriginIsolated?: boolean }
     ).crossOriginIsolated;
-
-    // Log diagnostic info for debugging
     console.log("[FFmpeg] Environment check:", {
       hasSharedArrayBuffer,
       crossOriginIsolated: isCrossOriginIsolated,
       location: window.location.origin,
       isInIframe: window.self !== window.top,
     });
-
     return hasSharedArrayBuffer && isCrossOriginIsolated;
   } catch (e) {
     console.warn("[FFmpeg] Multi-threading check failed:", e);
@@ -95,8 +82,12 @@ function supportsMultiThreading(): boolean {
 
 export function useFFmpegProcessor() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const blobUrlsRef = useRef<string[]>([]);
+  const loadPromiseRef = useRef<Promise<void> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timeoutCancelledRef = useRef(false);
+  const unmountedRef = useRef(false);
+
   const [state, setState] = useState<ProcessingState>({
     isLoading: false,
     loadProgress: 0,
@@ -119,6 +110,26 @@ export function useFFmpegProcessor() {
     setState((s) => ({ ...s, logs: [] }));
   }, []);
 
+  /** Terminate FFmpeg and revoke all blob URLs */
+  const dispose = useCallback(() => {
+    try { ffmpegRef.current?.terminate(); } catch { /* ok */ }
+    ffmpegRef.current = null;
+    for (const url of blobUrlsRef.current) {
+      try { URL.revokeObjectURL(url); } catch { /* ok */ }
+    }
+    blobUrlsRef.current = [];
+    loadPromiseRef.current = null;
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      dispose();
+    };
+  }, [dispose]);
+
   const cancel = useCallback(() => {
     if (
       abortControllerRef.current &&
@@ -126,12 +137,7 @@ export function useFFmpegProcessor() {
     ) {
       abortControllerRef.current.abort();
       addLog("warn", "Cancellation requested... Waiting for FFmpeg to stop...");
-      setState((s) => ({
-        ...s,
-        isCancelling: true,
-      }));
-
-      // Set a timeout to force cancellation if FFmpeg doesn't stop quickly
+      setState((s) => ({ ...s, isCancelling: true }));
       setTimeout(() => {
         if (
           abortControllerRef.current?.signal.aborted &&
@@ -144,149 +150,150 @@ export function useFFmpegProcessor() {
             error: "FFmpeg did not stop in time, forcing cancellation",
           }));
         }
-      }, 5000); // 5 second timeout
+      }, 5000);
     }
   }, [addLog]);
 
   const load = useCallback(async () => {
+    // Already loaded
     if (ffmpegRef.current?.loaded) return;
-
-    const useMultiThread = supportsMultiThreading();
-    addLog(
-      "info",
-      `Multi-threading: ${useMultiThread ? "enabled" : "disabled"}`,
-    );
-    if (!useMultiThread) {
-      addLog(
-        "warn",
-        "SharedArrayBuffer unavailable - running in single-threaded mode",
-      );
+    // Already loading — wait for it
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current;
+      return;
     }
 
-    // Check cross-origin isolation status
-    if (!globalThis.crossOriginIsolated) {
-      addLog(
-        "warn",
-        "Cross-origin isolation not enabled - SharedArrayBuffer unavailable",
-      );
-    }
+    const doLoad = async () => {
+      // Dispose any stale instance first
+      dispose();
 
-    setState((s) => ({
-      ...s,
-      isLoading: true,
-      loadProgress: 0,
-      loadPhase: "core",
-      isMultiThreaded: useMultiThread,
-      error: null,
-    }));
-
-    try {
-      const ffmpeg = new FFmpeg();
-      ffmpegRef.current = ffmpeg;
-
-      ffmpeg.on("log", ({ message }) => {
-        addLog("info", message);
-      });
-
-      ffmpeg.on("progress", ({ progress, time }) => {
-        // Clamp progress to 0-100 range (FFmpeg can report values > 1 initially)
-        const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
-        // Convert time from microseconds to human-readable format
-        const totalSeconds = Math.floor(time / 1000000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        const timeStr =
-          hours > 0
-            ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
-                .toString()
-                .padStart(2, "0")}`
-            : `${minutes}:${seconds.toString().padStart(2, "0")}`;
-        addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
-        setState((s) => ({ ...s, progress: pct }));
-      });
-
-      // Choose core based on browser support
-      const baseURL = useMultiThread
-        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm"
-        : "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
-      const resourcePrefix = useMultiThread ? "core-mt" : "core";
-
-      // Load core.js with integrity verification
-      addLog("info", "Loading FFmpeg core...");
-      setState((s) => ({ ...s, loadProgress: 10, loadPhase: "core" }));
-      const coreURL = await verifyAndFetchResource(
-        `${baseURL}/ffmpeg-core.js`,
-        `${resourcePrefix}/ffmpeg-core.js`,
-        "text/javascript",
-      );
-      addLog("info", "Core loaded successfully");
-
-      // Load WASM with integrity verification
-      addLog("info", "Loading WebAssembly module (~32MB)...");
-      setState((s) => ({ ...s, loadProgress: 40, loadPhase: "wasm" }));
-      const wasmURL = await verifyAndFetchResource(
-        `${baseURL}/ffmpeg-core.wasm`,
-        `${resourcePrefix}/ffmpeg-core.wasm`,
-        "application/wasm",
-      );
-      addLog("info", "WASM module loaded successfully");
-
-      // Load worker if multi-threaded
-      if (useMultiThread) {
-        addLog("info", "Loading multi-thread worker...");
-        setState((s) => ({ ...s, loadProgress: 70, loadPhase: "worker" }));
-        const workerURL = await verifyAndFetchResource(
-          `${baseURL}/ffmpeg-core.worker.js`,
-          `${resourcePrefix}/ffmpeg-core.worker.js`,
-          "text/javascript",
-        );
-        await ffmpeg.load({ coreURL, wasmURL, workerURL });
-        addLog("info", "Multi-threaded FFmpeg ready");
-      } else {
-        setState((s) => ({ ...s, loadProgress: 80 }));
-        await ffmpeg.load({ coreURL, wasmURL });
-        addLog("info", "Single-threaded FFmpeg ready");
+      const useMultiThread = supportsMultiThreading();
+      addLog("info", `Multi-threading: ${useMultiThread ? "enabled" : "disabled"}`);
+      if (!useMultiThread) {
+        addLog("warn", "SharedArrayBuffer unavailable - running in single-threaded mode");
+      }
+      if (!globalThis.crossOriginIsolated) {
+        addLog("warn", "Cross-origin isolation not enabled - SharedArrayBuffer unavailable");
       }
 
       setState((s) => ({
         ...s,
-        isLoading: false,
-        loadProgress: 100,
-        loadPhase: "ready",
-      }));
-    } catch (err) {
-      setState((s) => ({
-        ...s,
-        isLoading: false,
+        isLoading: true,
         loadProgress: 0,
-        loadPhase: "idle",
-        error: err instanceof Error ? err.message : "Failed to load FFmpeg",
+        loadPhase: "core",
+        isMultiThreaded: useMultiThread,
+        error: null,
       }));
-      addLog(
-        "error",
-        err instanceof Error ? err.message : "Failed to load FFmpeg",
-      );
-    }
-  }, [addLog]);
+
+      try {
+        const ffmpeg = new FFmpeg();
+        ffmpegRef.current = ffmpeg;
+
+        ffmpeg.on("log", ({ message }) => addLog("info", message));
+        ffmpeg.on("progress", ({ progress, time }) => {
+          const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
+          const totalSeconds = Math.floor(time / 1000000);
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          const timeStr =
+            hours > 0
+              ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+              : `${minutes}:${seconds.toString().padStart(2, "0")}`;
+          addLog("progress", `Progress: ${pct}% (time: ${timeStr})`);
+          setState((s) => ({ ...s, progress: pct }));
+        });
+
+        const baseURL = useMultiThread
+          ? "https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm"
+          : "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
+        const resourcePrefix = useMultiThread ? "core-mt" : "core";
+
+        addLog("info", "Loading FFmpeg core...");
+        setState((s) => ({ ...s, loadProgress: 10, loadPhase: "core" }));
+        const coreURL = await verifyAndFetchResource(
+          `${baseURL}/ffmpeg-core.js`,
+          `${resourcePrefix}/ffmpeg-core.js`,
+          "text/javascript",
+        );
+        blobUrlsRef.current.push(coreURL);
+        addLog("info", "Core loaded successfully");
+
+        addLog("info", "Loading WebAssembly module (~32MB)...");
+        setState((s) => ({ ...s, loadProgress: 40, loadPhase: "wasm" }));
+        const wasmURL = await verifyAndFetchResource(
+          `${baseURL}/ffmpeg-core.wasm`,
+          `${resourcePrefix}/ffmpeg-core.wasm`,
+          "application/wasm",
+        );
+        blobUrlsRef.current.push(wasmURL);
+        addLog("info", "WASM module loaded successfully");
+
+        if (useMultiThread) {
+          addLog("info", "Loading multi-thread worker...");
+          setState((s) => ({ ...s, loadProgress: 70, loadPhase: "worker" }));
+          const workerURL = await verifyAndFetchResource(
+            `${baseURL}/ffmpeg-core.worker.js`,
+            `${resourcePrefix}/ffmpeg-core.worker.js`,
+            "text/javascript",
+          );
+          blobUrlsRef.current.push(workerURL);
+          await ffmpeg.load({ coreURL, wasmURL, workerURL });
+          addLog("info", "Multi-threaded FFmpeg ready");
+        } else {
+          setState((s) => ({ ...s, loadProgress: 80 }));
+          await ffmpeg.load({ coreURL, wasmURL });
+          addLog("info", "Single-threaded FFmpeg ready");
+        }
+
+        if (unmountedRef.current) {
+          dispose();
+          return;
+        }
+
+        setState((s) => ({
+          ...s,
+          isLoading: false,
+          loadProgress: 100,
+          loadPhase: "ready",
+        }));
+      } catch (err) {
+        dispose();
+        if (!unmountedRef.current) {
+          setState((s) => ({
+            ...s,
+            isLoading: false,
+            loadProgress: 0,
+            loadPhase: "idle",
+            error: err instanceof Error ? err.message : "Failed to load FFmpeg",
+          }));
+          addLog("error", err instanceof Error ? err.message : "Failed to load FFmpeg");
+        }
+      }
+    };
+
+    loadPromiseRef.current = doLoad();
+    try { await loadPromiseRef.current; } finally { loadPromiseRef.current = null; }
+  }, [addLog, dispose]);
 
   const process = useCallback(
     async (config: ClipConfig) => {
       if (!config.videoFile || config.segments.length === 0) {
-        setState((s) => ({
-          ...s,
-          error: "Please add a video file and at least one segment",
-        }));
+        setState((s) => ({ ...s, error: "Please add a video file and at least one segment" }));
         return;
+      }
+
+      // Lazy-load FFmpeg if not ready
+      if (!ffmpegRef.current?.loaded) {
+        await load();
       }
 
       const ffmpeg = ffmpegRef.current;
       if (!ffmpeg?.loaded) {
-        setState((s) => ({ ...s, error: "FFmpeg not loaded" }));
+        setState((s) => ({ ...s, error: "FFmpeg failed to load" }));
         return;
       }
 
-      // Create new abort controller for this processing session
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
 
@@ -303,97 +310,57 @@ export function useFFmpegProcessor() {
       }));
 
       try {
-        // Check if cancelled before starting
-        if (signal.aborted) {
-          throw new Error("Processing cancelled");
-        }
-        // Write input files
+        if (signal.aborted) throw new Error("Processing cancelled");
+
         addLog("info", `Loading video file: ${config.videoFile.name}`);
         const videoData = await fetchFile(config.videoFile);
         await ffmpeg.writeFile("input.mp4", videoData);
         addLog("info", "Video file loaded into memory");
 
-        // Check if cancelled after loading video
-        if (signal.aborted) {
-          throw new Error("Processing cancelled");
-        }
+        if (signal.aborted) throw new Error("Processing cancelled");
 
-        // Check video duration and audio by analyzing FFmpeg output
+        // Analyze video
         addLog("info", "Analyzing video file...");
         let hasInputAudio = false;
         let videoDuration = 0;
-
-        // Capture logs during probe
         const audioCheckLogs: string[] = [];
         const logHandler = ({ message }: { message: string }) => {
           audioCheckLogs.push(message);
         };
         ffmpeg.on("log", logHandler);
-
-        // Run probe command - this will log stream info
         await ffmpeg.exec(["-i", "input.mp4", "-t", "0", "-f", "null", "-"]);
 
-        // Check if cancelled after probe
-        if (signal.aborted) {
-          throw new Error("Processing cancelled");
-        }
+        if (signal.aborted) throw new Error("Processing cancelled");
 
-        // Parse duration from logs (format: "Duration: HH:MM:SS.xx")
-        const durationLog = audioCheckLogs.find((log) =>
-          log.includes("Duration:"),
-        );
+        const durationLog = audioCheckLogs.find((log) => log.includes("Duration:"));
         if (durationLog) {
-          const match = durationLog.match(
-            /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/,
-          );
+          const match = durationLog.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
           if (match) {
-            const hours = parseInt(match[1], 10);
-            const minutes = parseInt(match[2], 10);
-            const seconds = parseFloat(match[3]);
-            videoDuration = hours * 3600 + minutes * 60 + seconds;
-            addLog(
-              "info",
-              `Video duration: ${videoDuration.toFixed(2)} seconds`,
-            );
+            videoDuration = parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseFloat(match[3]);
+            addLog("info", `Video duration: ${videoDuration.toFixed(2)} seconds`);
           }
         }
 
-        // Check if any log mentions an audio stream
         hasInputAudio = audioCheckLogs.some(
           (log) =>
             log.toLowerCase().includes("audio:") ||
-            (log.toLowerCase().includes("stream") &&
-              log.toLowerCase().includes("audio")),
+            (log.toLowerCase().includes("stream") && log.toLowerCase().includes("audio")),
         );
+        addLog("info", hasInputAudio ? "Audio track detected" : "No audio track found");
 
-        addLog(
-          "info",
-          hasInputAudio ? "Audio track detected" : "No audio track found",
-        );
-
-        // Validate segment times against video duration
+        // Validate segments
         if (videoDuration > 0) {
           for (const seg of config.segments) {
             const startSec = timeToSeconds(seg.start);
             const endSec = timeToSeconds(seg.end);
-
             if (startSec >= videoDuration) {
-              throw new Error(
-                `Segment start time (${seg.start}) is beyond video ` +
-                  `duration (${videoDuration.toFixed(1)}s)`,
-              );
+              throw new Error(`Segment start time (${seg.start}) is beyond video duration (${videoDuration.toFixed(1)}s)`);
             }
             if (endSec > videoDuration) {
-              addLog(
-                "warn",
-                `Segment end time (${seg.end}) exceeds video duration, ` +
-                  `clamping to ${videoDuration.toFixed(1)}s`,
-              );
+              addLog("warn", `Segment end time (${seg.end}) exceeds video duration, clamping to ${videoDuration.toFixed(1)}s`);
             }
             if (startSec >= endSec) {
-              throw new Error(
-                `Invalid segment: start (${seg.start}) must be before end (${seg.end})`,
-              );
+              throw new Error(`Invalid segment: start (${seg.start}) must be before end (${seg.end})`);
             }
           }
         }
@@ -403,36 +370,23 @@ export function useFFmpegProcessor() {
           const audioData = await fetchFile(config.audioFile);
           await ffmpeg.writeFile("input_audio", audioData);
           addLog("info", "Audio file loaded into memory");
-
-          // Check if cancelled after loading audio
-          if (signal.aborted) {
-            throw new Error("Processing cancelled");
-          }
+          if (signal.aborted) throw new Error("Processing cancelled");
         }
 
-        // Determine if we should process audio
         const processAudio = !!(config.audioFile || hasInputAudio);
         if (!processAudio) {
-          addLog(
-            "warn",
-            "Input video has no audio track - processing video only",
-          );
+          addLog("warn", "Input video has no audio track - processing video only");
         }
 
         const fadeDuration = config.fadeDuration;
         const numSegments = config.segments.length;
 
-        // Log segment info for debugging
         config.segments.forEach((seg, i) => {
           const startSec = timeToSeconds(seg.start);
           const endSec = timeToSeconds(seg.end);
-          addLog(
-            "info",
-            `Segment ${i + 1}: ${seg.start} (${startSec}s) to ${seg.end} (${endSec}s)`,
-          );
+          addLog("info", `Segment ${i + 1}: ${seg.start} (${startSec}s) to ${seg.end} (${endSec}s)`);
         });
 
-        // For single segment without fades, use simpler -ss/-to approach
         const canUseSimpleMode =
           numSegments === 1 &&
           !config.segments[0].fadeIn &&
@@ -440,55 +394,23 @@ export function useFFmpegProcessor() {
           !config.globalFadeIn &&
           !config.globalFadeOut;
 
-        // Build simple args (no filter_complex)
         const buildSimpleArgs = (withAudio: boolean): string[] => {
           const seg = config.segments[0];
           const startSec = timeToSeconds(seg.start);
           const endSec = timeToSeconds(seg.end);
-
-          const args = [
-            "-ss",
-            startSec.toString(),
-            "-i",
-            "input.mp4",
-            "-t",
-            (endSec - startSec).toString(),
-          ];
-
+          const args = ["-ss", startSec.toString(), "-i", "input.mp4", "-t", (endSec - startSec).toString()];
           if (config.audioFile) {
-            args.push(
-              "-ss",
-              startSec.toString(),
-              "-i",
-              "input_audio",
-              "-t",
-              (endSec - startSec).toString(),
-            );
+            args.push("-ss", startSec.toString(), "-i", "input_audio", "-t", (endSec - startSec).toString());
           }
-
           if (withAudio) {
             args.push("-c:v", "libx264", "-c:a", "aac", "-b:a", "128k");
           } else {
             args.push("-c:v", "libx264", "-an");
           }
-
-          args.push(
-            "-preset",
-            "fast",
-            "-crf",
-            "23",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
-            "-y",
-            "output.mp4",
-          );
-
+          args.push("-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y", "output.mp4");
           return args;
         };
 
-        // Build complex args (with filter_complex for multi-segment or fades)
         const buildComplexArgs = (withAudio: boolean): string[] => {
           const videoFilters: string[] = [];
           const audioFilters: string[] = [];
@@ -498,36 +420,20 @@ export function useFFmpegProcessor() {
             const startSec = timeToSeconds(seg.start);
             const endSec = timeToSeconds(seg.end);
             const duration = endSec - startSec;
-
             const shouldFadeIn = seg.fadeIn || (i === 0 && config.globalFadeIn);
-            const shouldFadeOut =
-              seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
+            const shouldFadeOut = seg.fadeOut || (i === numSegments - 1 && config.globalFadeOut);
 
             let vFilter = `[0:v]trim=start=${startSec}:end=${endSec},setpts=PTS-STARTPTS`;
-            if (shouldFadeIn) {
-              vFilter += `,fade=t=in:st=0:d=${fadeDuration}`;
-            }
-            if (shouldFadeOut) {
-              vFilter += `,fade=t=out:st=${Math.max(
-                0,
-                duration - fadeDuration,
-              )}:d=${fadeDuration}`;
-            }
+            if (shouldFadeIn) vFilter += `,fade=t=in:st=0:d=${fadeDuration}`;
+            if (shouldFadeOut) vFilter += `,fade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
             vFilter += `[v${i}]`;
             videoFilters.push(vFilter);
 
             if (withAudio) {
               const audioInput = config.audioFile ? "1:a" : "0:a";
               let aFilter = `[${audioInput}]atrim=start=${startSec}:end=${endSec},asetpts=PTS-STARTPTS`;
-              if (shouldFadeIn) {
-                aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
-              }
-              if (shouldFadeOut) {
-                aFilter += `,afade=t=out:st=${Math.max(
-                  0,
-                  duration - fadeDuration,
-                )}:d=${fadeDuration}`;
-              }
+              if (shouldFadeIn) aFilter += `,afade=t=in:st=0:d=${fadeDuration}`;
+              if (shouldFadeOut) aFilter += `,afade=t=out:st=${Math.max(0, duration - fadeDuration)}:d=${fadeDuration}`;
               aFilter += `[a${i}]`;
               audioFilters.push(aFilter);
               concatInputs.push(`[v${i}][a${i}]`);
@@ -538,93 +444,42 @@ export function useFFmpegProcessor() {
 
           let filterComplex: string;
           if (withAudio) {
-            const concatFilter = `${concatInputs.join(
-              "",
-            )}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
-            filterComplex = [
-              ...videoFilters,
-              ...audioFilters,
-              concatFilter,
-            ].join(";");
+            const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=1[outv][outa]`;
+            filterComplex = [...videoFilters, ...audioFilters, concatFilter].join(";");
           } else {
             const concatFilter = `${concatInputs.join("")}concat=n=${numSegments}:v=1:a=0[outv]`;
             filterComplex = [...videoFilters, concatFilter].join(";");
           }
 
           const args = ["-i", "input.mp4"];
-          if (config.audioFile) {
-            args.push("-i", "input_audio");
-          }
+          if (config.audioFile) args.push("-i", "input_audio");
           args.push("-filter_complex", filterComplex, "-map", "[outv]");
-
-          if (withAudio) {
-            args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
-          }
-
-          args.push(
-            "-c:v",
-            "libx264",
-            "-preset",
-            "fast",
-            "-crf",
-            "23",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
-            "-y",
-            "output.mp4",
-          );
-
+          if (withAudio) args.push("-map", "[outa]", "-c:a", "aac", "-b:a", "128k");
+          args.push("-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y", "output.mp4");
           return args;
         };
 
-        const buildProcessingArgs = canUseSimpleMode
-          ? buildSimpleArgs
-          : buildComplexArgs;
+        const buildProcessingArgs = canUseSimpleMode ? buildSimpleArgs : buildComplexArgs;
+        addLog("info", `Using ${canUseSimpleMode ? "simple" : "complex filter"} mode`);
 
-        addLog(
-          "info",
-          `Using ${canUseSimpleMode ? "simple" : "complex filter"} mode`,
-        );
-
-        // Try processing with audio first, fallback to video-only if it fails
         let success = false;
         let attemptWithAudio = processAudio;
 
         while (!success) {
           const args = buildProcessingArgs(attemptWithAudio);
-          addLog(
-            "info",
-            `Processing ${attemptWithAudio ? "with" : "without"} audio...`,
-          );
+          addLog("info", `Processing ${attemptWithAudio ? "with" : "without"} audio...`);
           addLog("info", `Command: ffmpeg ${args.join(" ")}`);
-
           addLog("info", "Starting FFmpeg processing...");
-
-          // Check if cancelled before FFmpeg exec
-          if (signal.aborted) {
-            throw new Error("Processing cancelled");
-          }
+          if (signal.aborted) throw new Error("Processing cancelled");
 
           const exitCode = await ffmpeg.exec(args);
 
           if (exitCode !== 0) {
             addLog("warn", `FFmpeg exited with code ${exitCode}`);
-
-            // If we tried with audio and it failed, retry without audio
             if (attemptWithAudio) {
-              addLog(
-                "warn",
-                "Audio processing failed, retrying without audio...",
-              );
+              addLog("warn", "Audio processing failed, retrying without audio...");
               attemptWithAudio = false;
-              // Delete any partial output
-              try {
-                await ffmpeg.deleteFile("output.mp4");
-              } catch {
-                // File might not exist
-              }
+              try { await ffmpeg.deleteFile("output.mp4"); } catch { /* ok */ }
               continue;
             } else {
               throw new Error(`FFmpeg exited with code ${exitCode}`);
@@ -632,52 +487,27 @@ export function useFFmpegProcessor() {
           }
 
           addLog("info", "Reading output file...");
-
-          // Check if cancelled before reading output
-          if (signal.aborted) {
-            throw new Error("Processing cancelled");
-          }
+          if (signal.aborted) throw new Error("Processing cancelled");
 
           const data = (await ffmpeg.readFile("output.mp4")) as Uint8Array;
 
           if (data.length < 1000) {
             addLog("warn", `Output file is too small (${data.length} bytes)`);
-
-            // If we tried with audio and got corrupted output, retry without
             if (attemptWithAudio) {
-              addLog(
-                "warn",
-                "Output corrupted with audio, retrying without audio...",
-              );
+              addLog("warn", "Output corrupted with audio, retrying without audio...");
               attemptWithAudio = false;
-              try {
-                await ffmpeg.deleteFile("output.mp4");
-              } catch {
-                // File might not exist
-              }
+              try { await ffmpeg.deleteFile("output.mp4"); } catch { /* ok */ }
               continue;
             } else {
               throw new Error("Output file is corrupted or empty");
             }
           }
 
-          // Success!
           success = true;
           const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
           const url = URL.createObjectURL(blob);
 
-          addLog(
-            "info",
-            `Processing complete! Output size: ${(
-              data.length /
-              1024 /
-              1024
-            ).toFixed(2)} MB${
-              !attemptWithAudio && processAudio
-                ? " (video only - audio failed)"
-                : ""
-            }`,
-          );
+          addLog("info", `Processing complete! Output size: ${(data.length / 1024 / 1024).toFixed(2)} MB${!attemptWithAudio && processAudio ? " (video only - audio failed)" : ""}`);
 
           setState((s) => ({
             ...s,
@@ -687,22 +517,17 @@ export function useFFmpegProcessor() {
           }));
         }
 
-        // Cleanup
-        await ffmpeg.deleteFile("input.mp4");
+        // Cleanup virtual FS
+        try { await ffmpeg.deleteFile("input.mp4"); } catch { /* ok */ }
         if (config.audioFile) {
-          await ffmpeg.deleteFile("input_audio");
+          try { await ffmpeg.deleteFile("input_audio"); } catch { /* ok */ }
         }
-        try {
-          await ffmpeg.deleteFile("output.mp4");
-        } catch {
-          // Already deleted or doesn't exist
-        }
+        try { await ffmpeg.deleteFile("output.mp4"); } catch { /* ok */ }
       } catch (err) {
-        const errorMsg =
-          err instanceof Error ? err.message : "Processing failed";
+        const errorMsg = err instanceof Error ? err.message : "Processing failed";
+        const signal = abortControllerRef.current?.signal;
 
-        // Check if this was a cancellation
-        if (signal.aborted || errorMsg === "Processing cancelled") {
+        if (signal?.aborted || errorMsg === "Processing cancelled") {
           addLog("warn", "Processing cancelled by user");
           setState((s) => ({
             ...s,
@@ -720,19 +545,16 @@ export function useFFmpegProcessor() {
             error: errorMsg,
           }));
         }
-
-        // Reset timeout flag
         timeoutCancelledRef.current = false;
       }
     },
-    [addLog, clearLogs],
+    [addLog, clearLogs, load],
   );
 
   const reset = useCallback(() => {
     if (state.outputUrl) {
       URL.revokeObjectURL(state.outputUrl);
     }
-    // Reset timeout flag
     timeoutCancelledRef.current = false;
     setState((s) => ({
       ...s,
