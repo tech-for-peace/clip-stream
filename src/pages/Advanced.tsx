@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFFmpegRawProcessor, type LogEntry } from "@/hooks/useFFmpegRawProcessor";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { ResetBanner } from "@/components/ResetBanner";
 
 interface FileMetadata {
   duration?: number;
@@ -93,9 +94,7 @@ export default function Advanced() {
 
   const processor = useFFmpegRawProcessor();
 
-  useEffect(() => {
-    processor.load();
-  }, [processor]);
+  // FFmpeg is loaded lazily when the user clicks Run — no eager loading
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -539,13 +538,20 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
             {!processor.isProcessing && !processor.outputUrl && (
               <Button
                 onClick={handleRun}
-                disabled={!processor.isReady || !command.trim()}
+                disabled={!command.trim()}
                 size="sm"
                 className="w-full"
               >
                 <Play className="h-4 w-4 mr-1" />
-                Run FFmpeg Command
+                {processor.isReady ? "Run FFmpeg Command" : "Initialize & Run"}
               </Button>
+            )}
+
+            {/* Info when not loaded */}
+            {!processor.isReady && !processor.isLoading && !processor.isProcessing && (
+              <p className="text-xs text-muted-foreground">
+                FFmpeg will be downloaded (~32MB) when you click Run. Processes entirely in your browser.
+              </p>
             )}
 
             {/* Logs */}
@@ -600,13 +606,16 @@ Please provide ONLY the ffmpeg command, nothing else. Start with "ffmpeg" direct
         </div>
 
         {/* Footer */}
-        <footer className="border-t border-border/50 pt-4">
+        <footer className="border-t border-border/50 pt-4 space-y-2">
           <p className="text-xs text-muted-foreground text-center">
             Made with ❤️ by{" "}
             <a href="https://techforpeace.co.in" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
               techforpeace.co.in
             </a>
           </p>
+          <div className="text-center">
+            <ResetBanner />
+          </div>
         </footer>
       </main>
     </div>
